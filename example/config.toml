@@ -1,0 +1,32 @@
+activity_paths = [
+  "$HOME/activities.txt",
+  "$HOME/subdir/activities.txt",
+]
+
+[quadrants]
+# urgent and important
+1 = []
+
+# non-urgent and important
+2 = [
+  "@sleep",
+]
+
+# urgent and unimportant
+3 = [
+  "@news",
+]
+
+# non-urgent and unimportant
+4 =[
+  "@proc",
+  "@news",
+  "@twitch",
+]
+
+# maintenance, necessary
+5 = [
+  "@eat",
+  "@shower",
+  "@groceries",
+]

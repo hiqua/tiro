@@ -1,0 +1,37 @@
+[package]
+name = "tiro"
+version = "0.1.0"
+authors = ["Quentin Hibon <qh.public@yahoo.com>"]
+edition = "2018"
+
+build = "build.rs"
+
+[dependencies]
+
+chrono = "0.4"
+
+time = "0.1.12"
+
+
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5.6"
+serde_derive = "1.0.106"
+
+
+
+
+colored = "1.9"
+
+clap = {version = "2.33.0", features = ["yaml"]}
+
+
+notify = "4.0.12"
+
+git2 = "0.13.12"
+
+# requires some libdbus library, see github page
+notify-rust = "3"
+
+
+[build-dependencies]
+vergen = "3"
