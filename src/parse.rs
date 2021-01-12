@@ -326,9 +326,16 @@ fn parse_date(s: &str) -> Option<Timestamp> {
 fn get_life_chunk(line: &str) -> TiroResult<LifeChunk> {
     let mut tokens = line.split(|c: char| c == ',' || c.is_whitespace());
 
-    // XXX: shouldn't fail hard if no tokens
-    let h = Duration::hours(tokens.next().unwrap().parse()?);
-    let m = Duration::minutes(tokens.next().unwrap().parse()?);
+    let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
+        tokens
+            .next()
+            .and_then(|i| i.parse::<i64>().ok())
+            .map(parse_as)
+            .unwrap_or_else(Duration::zero)
+    };
+    let h = parse_token_as_duration(Duration::hours);
+    let m = parse_token_as_duration(Duration::minutes);
+
     let duration = h + m;
 
     let mut newline: Vec<&str> = vec![];
