@@ -15,7 +15,7 @@ use time::Duration;
 use crate::config::MetaCategory::{Quad, RegularCategory};
 use crate::config::{update_parse_state_from_config, Config, MetaCategory, Quadrant};
 use crate::merge::merge_strictly_compatible_lifelapses;
-use crate::parse::LineParseResult::{Date, LineParseError, LC};
+use crate::parse::LineParseResult::{Date, Lc};
 use crate::summary::Timestamp;
 use crate::{TiroError, TiroResult};
 
@@ -120,7 +120,7 @@ impl LifeLapse {
 
 #[derive(Clone)]
 pub enum TiroToken {
-    TLC { tlc: TimedLifeChunk },
+    Tlc { tlc: TimedLifeChunk },
     Date { date: Timestamp },
 }
 
@@ -132,9 +132,9 @@ pub struct TimedLifeChunk {
 
 #[derive(Clone)]
 pub enum LineParseResult {
-    LC { life_chunk: LifeChunk },
+    Lc { life_chunk: LifeChunk },
     Date { date: Timestamp },
-    LineParseError { line: String },
+    // LineParseError { line: String },
 }
 
 #[derive(Clone, Debug)]
@@ -183,7 +183,7 @@ pub fn get_all_life_lapses(
 }
 
 pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse> {
-    let list_of_pr = parse_all_lines(&mut it, true);
+    let list_of_pr = parse_all_lines(&mut it);
 
     let start_time = if let Some(LineParseResult::Date { date }) = list_of_pr.first() {
         *date
@@ -205,7 +205,7 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
     let mut current_ll = LifeLapse::new(start_time);
     for tok in tiro_tokens {
         match tok {
-            TiroToken::TLC { tlc } => {
+            TiroToken::Tlc { tlc } => {
                 current_ll.push(tlc);
             }
             TiroToken::Date { date } => {
@@ -307,8 +307,7 @@ fn parse_date(s: &str) -> Option<Timestamp> {
 
     let formats = vec!["%Y-%m-%d %H:%M", "%Y-%m-%d %Hh%M"];
 
-    let mut results = Vec::new();
-    results.push(def());
+    let mut results = vec![def()];
 
     for fmt in formats {
         results.push(generic_fmt(fmt));
@@ -323,7 +322,7 @@ fn parse_date(s: &str) -> Option<Timestamp> {
     None
 }
 
-fn get_life_chunk(line: &str) -> TiroResult<LifeChunk> {
+fn get_life_chunk(line: &str) -> LifeChunk {
     let mut tokens = line.split(|c: char| c == ',' || c.is_whitespace());
 
     let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
@@ -367,7 +366,7 @@ fn get_life_chunk(line: &str) -> TiroResult<LifeChunk> {
 
     // XXX: what to do if description is empty (categories self-explaining). Could have None instead.
     let qu = quadrant.or_else(|| Some(Default::default())).unwrap();
-    Ok(LifeChunk {
+    LifeChunk {
         description,
         duration,
         categories,
@@ -375,21 +374,21 @@ fn get_life_chunk(line: &str) -> TiroResult<LifeChunk> {
         quadrant: qu,
         user_provided_quadrant: quadrant.is_some(),
         input: to_join.join(" "),
-    })
+    }
 }
 
 /// this function should not exist, the conversion should happen now
-fn parse_all_lines(it: &mut Iter<String>, log_errors: bool) -> Vec<LineParseResult> {
+fn parse_all_lines(it: &mut Iter<String>) -> Vec<LineParseResult> {
     let mut list_of_pr = vec![];
 
     for s in it {
         match process_line(s) {
             Some(LineParseResult::Date { date }) => list_of_pr.push(LineParseResult::Date { date }),
-            Some(LineParseError { line }) => {
-                if log_errors {
-                    println!("Found faulty line in input:\n{}\n", line);
-                }
-            }
+            // Some(LineParseError { line }) => {
+            //     if log_errors {
+            //         println!("Found faulty line in input:\n{}\n", line);
+            //     }
+            // }
             Some(lp) => {
                 if !list_of_pr.is_empty() {
                     list_of_pr.push(lp)
@@ -407,7 +406,7 @@ fn parse_all_lines(it: &mut Iter<String>, log_errors: bool) -> Vec<LineParseResu
 fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
     let mut parse_state = ParseState::new();
     for lpr in list_of_timed_pr {
-        if let LineParseResult::LC { life_chunk: lc } = lpr {
+        if let LineParseResult::Lc { life_chunk: lc } = lpr {
             register_categories_from_life_chunk(lc, &mut parse_state);
         }
     }
@@ -415,12 +414,12 @@ fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
 }
 
 fn update_lpr_quadrant(lpr: LineParseResult, parse_state: &ParseState) -> LineParseResult {
-    if let LineParseResult::LC { life_chunk: lc } = lpr {
+    if let LineParseResult::Lc { life_chunk: lc } = lpr {
         if !lc.user_provided_quadrant {
             let new_lc = update_quadrant(lc, &parse_state);
-            LineParseResult::LC { life_chunk: new_lc }
+            LineParseResult::Lc { life_chunk: new_lc }
         } else {
-            LineParseResult::LC { life_chunk: lc }
+            LineParseResult::Lc { life_chunk: lc }
         }
     } else {
         lpr
@@ -449,20 +448,19 @@ fn tokens_from_timed_lpr(
     let mut curr_time = start_time;
     for lpr in list_of_pr {
         match lpr {
-            LineParseResult::LC { life_chunk } => {
+            LineParseResult::Lc { life_chunk } => {
                 let duration = life_chunk.duration;
                 let tlc = TimedLifeChunk {
                     start: curr_time,
                     life_chunk,
                 };
                 curr_time = curr_time + duration;
-                tiro_tokens.push(TiroToken::TLC { tlc })
+                tiro_tokens.push(TiroToken::Tlc { tlc })
             }
             LineParseResult::Date { date } => {
                 curr_time = date;
                 tiro_tokens.push(TiroToken::Date { date })
-            }
-            LineParseResult::LineParseError { .. } => {}
+            } // LineParseResult::LineParseError { .. } => {}
         };
     }
 
@@ -477,11 +475,9 @@ fn process_line(line: &str) -> Option<LineParseResult> {
 
     if let Some(date) = parse_date(line) {
         Some(Date { date })
-    } else if let Ok(life_chunk) = get_life_chunk(line) {
-        Some(LC { life_chunk })
     } else {
-        Some(LineParseError {
-            line: line.to_string(),
+        Some(Lc {
+            life_chunk: get_life_chunk(line),
         })
     }
 }

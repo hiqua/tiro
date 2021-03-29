@@ -14,7 +14,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::fs::canonicalize;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use toml::de::Error;
 
 pub type Category = str;
@@ -63,13 +63,13 @@ struct RawConfig {
 mod tests {
 
     #[derive(Debug, Serialize, Deserialize)]
-    struct PB {
+    struct Pb {
         p: PathBuf,
     }
 
     #[test]
     fn parse_as_path_buf() {
-        let config: PB = toml::from_str(
+        let config: Pb = toml::from_str(
             r#"
             p = "/$MOBILE_DIR/0_planning/activities.txt"
                 "#,
@@ -209,6 +209,7 @@ fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
     let activity_paths = raw_config
         .activity_paths
         .iter()
+        .map(|p| p.as_path())
         .map(substitute_env_variable)
         .map(|f| {
             f.canonicalize()
@@ -281,7 +282,7 @@ pub fn update_parse_state_from_config(
 
 /// Replace $VAR in path, when the full component is such a var.
 /// I could use a crate for that, but it's simpler to just have a small function for now.
-fn substitute_env_variable(path: &PathBuf) -> PathBuf {
+fn substitute_env_variable(path: &Path) -> PathBuf {
     let mut new_path = PathBuf::new();
     for part in path.iter() {
         if part.to_str().unwrap().starts_with('$') {
