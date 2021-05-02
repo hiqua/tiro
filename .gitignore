@@ -1,3 +1,4 @@
 /archive
 /target
 **/*.rs.bk
+.idea/
