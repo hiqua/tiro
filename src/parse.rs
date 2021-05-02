@@ -10,14 +10,16 @@ use std::slice::Iter;
 use std::str::FromStr;
 
 use chrono::{Local, TimeZone};
+use chrono::offset::LocalResult;
+use chrono::prelude::*;
 use time::Duration;
 
+use crate::{TiroError, TiroResult};
+use crate::config::{Config, MetaCategory, Quadrant, update_parse_state_from_config};
 use crate::config::MetaCategory::{Quad, RegularCategory};
-use crate::config::{update_parse_state_from_config, Config, MetaCategory, Quadrant};
 use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
 use crate::summary::Timestamp;
-use crate::{TiroError, TiroResult};
 
 #[cfg(test)]
 mod tests {
@@ -27,12 +29,6 @@ mod tests {
 
     #[test]
     fn parsing_1() {
-        assert_eq!(
-            parse_date("2020-03-02T23:20:00+01:00").unwrap(),
-            Local.ymd(2020, 0o3, 0o2).and_hms(23, 20, 00)
-        );
-        // assert_eq!(parse_date("2020-03-02T23:20:00"), Some(Local.ymd(2020, 03, 02).and_hms(23, 20, 00)));
-
         let dt = Local.ymd(2014, 11, 28).and_hms(12, 0, 0);
         assert_eq!(
             Local
@@ -86,7 +82,7 @@ impl LifeLapse {
             .fold(Duration::hours(0), |sum, t| sum.add(t.life_chunk.duration))
     }
 
-    pub fn extend<I: IntoIterator<Item = TimedLifeChunk>>(&mut self, iter: I) {
+    pub fn extend<I: IntoIterator<Item=TimedLifeChunk>>(&mut self, iter: I) {
         self.tokens.extend(iter);
         let d = self.total_duration();
         self.end = self.start + d;
