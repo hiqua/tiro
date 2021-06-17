@@ -220,7 +220,7 @@ pub fn look_for_seen_quadrant(chunk: &LifeChunk, pst: &ParseState) -> Option<Qua
         .categories
         .iter()
         .map(|c| pst.categories_to_quadrant.get(c).copied())
-        .filter_map(|v| v)
+        .flatten()
         .next()
 }
 
@@ -309,13 +309,7 @@ fn parse_date(s: &str) -> Option<Timestamp> {
         results.push(generic_fmt(fmt));
     }
 
-    for r in results {
-        if let Ok(v) = r {
-            return Some(v);
-        }
-    }
-
-    None
+    results.iter().find_map(|r| r.ok())
 }
 
 fn get_life_chunk(line: &str) -> LifeChunk {
