@@ -3,6 +3,10 @@ name = "tiro"
 version = "0.1.0"
 authors = ["Quentin Hibon <qh.public@yahoo.com>"]
 edition = "2018"
+repository = "https://github.com/hiqua/tiro"
+homepage = "https://github.com/hiqua/tiro"
+description = "Planning tool"
+
 
 build = "build.rs"
 
