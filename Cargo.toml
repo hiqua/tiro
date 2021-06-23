@@ -6,6 +6,7 @@ edition = "2018"
 repository = "https://github.com/hiqua/tiro"
 homepage = "https://github.com/hiqua/tiro"
 description = "Planning tool"
+license = "GPL-3.0-or-later"
 
 
 build = "build.rs"
