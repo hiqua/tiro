@@ -406,7 +406,7 @@ fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
 fn update_lpr_quadrant(lpr: LineParseResult, parse_state: &ParseState) -> LineParseResult {
     if let LineParseResult::Lc { life_chunk: lc } = lpr {
         if !lc.user_provided_quadrant {
-            let new_lc = update_quadrant(lc, &parse_state);
+            let new_lc = update_quadrant(lc, parse_state);
             LineParseResult::Lc { life_chunk: new_lc }
         } else {
             LineParseResult::Lc { life_chunk: lc }

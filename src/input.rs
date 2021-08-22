@@ -19,7 +19,7 @@ pub fn write_plan(
 ) -> TiroResult<()> {
     for (ref mut plan_writer, plan_color) in &mut plan_writers {
         write_to(
-            || format_lifelapses(&all_life_lapses),
+            || format_lifelapses(all_life_lapses),
             plan_writer.borrow_mut(),
             *plan_color,
         )?;
@@ -34,7 +34,7 @@ pub fn write_summary(
     for (ts, summary) in all_summaries {
         for (ref mut summary_writer, summary_color) in &mut summary_writers {
             write_to(
-                || format_category_summary(compute_context_summary(&summary), ts.date()),
+                || format_category_summary(compute_context_summary(summary), ts.date()),
                 summary_writer.borrow_mut(),
                 *summary_color,
             )?;
