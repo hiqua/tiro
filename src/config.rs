@@ -1,21 +1,19 @@
 use core::fmt;
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
-use std::str::FromStr;
-
-use std::env;
-
-use crate::parse::ParseState;
-use crate::{TiroError, TiroResult};
-use colored::*;
-
-use clap::ArgMatches;
 use std::collections::{BTreeSet, HashMap};
+use std::env;
 use std::fs;
 use std::fs::canonicalize;
-
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
+use clap::ArgMatches;
+use colored::*;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
 use toml::de::Error;
+
+use crate::{TiroError, TiroResult};
+use crate::parse::ParseState;
 
 pub type Category = str;
 
@@ -61,6 +59,12 @@ struct RawConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::env;
+    use std::path::PathBuf;
+
+    use serde_derive::Deserialize;
+    use serde_derive::Serialize;
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Pb {
@@ -73,8 +77,7 @@ mod tests {
             r#"
             p = "/$MOBILE_DIR/0_planning/activities.txt"
                 "#,
-        )
-        .unwrap();
+        ).unwrap();
 
         println!("{:?}", config);
         let mut new_p = PathBuf::new();
@@ -95,13 +98,6 @@ mod tests {
 
         println!("Res: {:?}", new_p);
     }
-
-    use serde_derive::Deserialize;
-    use serde_derive::Serialize;
-    use std::collections::HashMap;
-    use std::env;
-
-    use std::path::PathBuf;
 
     #[derive(Serialize, Deserialize)]
     struct Config {
@@ -124,7 +120,7 @@ mod tests {
                 ]
                 "#,
         )
-        .unwrap();
+            .unwrap();
         println!("{:?}", config.activity_paths);
         println!("{:?}", config.quadrants);
     }
@@ -224,11 +220,13 @@ fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
     })
 }
 
-pub fn load_config_or_default(path: &str, matches: &ArgMatches) -> Config {
-    let mut conf = match load_config(path) {
-        Ok(c) => c,
-        Err(_) => Config::default(),
-    };
+pub fn load_config_from_matches(matches: &ArgMatches) -> Config {
+    let config_paths = matches.values_of("config").expect("");
+    let mut conf = Config::default();
+
+    for config_path in config_paths {
+        conf = load_config(config_path).expect("Cannot proceed without valid configuration path.")
+    }
 
     conf.notify |= matches.is_present("notify");
     conf.quiet |= matches.is_present("quiet");

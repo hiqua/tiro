@@ -37,12 +37,14 @@ args:
       long: quiet
       help: Quiet output
       takes_value: false
-#  - config:
-#      short: c
-#      long: config
-#      value_name: FILE
-#      help: Sets a custom config file
-#      takes_value: true
+  - config:
+      short: c
+      long: config
+      value_name: FILE
+      help: Sets a custom config file
+      takes_value: true
+      required: true
+
 #  - verbose:
 #      short: v
 #      multiple: true

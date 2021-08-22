@@ -14,7 +14,7 @@ use std::time::Duration as StdDuration;
 use clap::App;
 use notify::{watcher, RecursiveMode, Watcher};
 
-use crate::config::{load_config_or_default, Config};
+use crate::config::{load_config_from_matches, Config};
 use crate::input::{delay, get_all_lines, get_writers, write_plan, write_summary};
 use crate::notification::spawn_notification_thread;
 use crate::parse::{get_all_life_lapses, TimedLifeChunk};
@@ -142,7 +142,7 @@ fn main() -> TiroResult<()> {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).version(&*full_version()).get_matches();
 
-    let config = load_config_or_default("/home/hiq/.config/tiro/config.toml", &matches);
+    let config = load_config_from_matches(&matches);
     if config.watch {
         watch_main_loop(&config)?;
     } else {
