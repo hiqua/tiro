@@ -54,11 +54,34 @@ tiro -a example/activities.txt
 * handle timestamps with format 015 0h 15min for faster input
 * handle timestamps with only hours given
 
+### TODO
+* write tests in every file
+* sanity check on date of day: if distance of activities with current date is more than 20h, something fishy, warn about it
+* improve packaging (available on work computers)
+* option to hide categories from a subcategory, e.g. work
+* option to output only categories (@work)
+* try to use fzf to get autocompletion for tiro files
+* suggest to switch to categories already known, if close
+* output the width of screen somewhere, to adapt tmux
+* show time left between lifelapses
+* transition between activities
+* watch config file as well
+* also show categories in summary
+* remove case sensitivity for categories and association categories to quadrant
+* also save activity file
+* multiline description
+* detect if several quadrant for one category
+* make colors configurable
 
-## Random ideas (in)
-
-* category tree
+### Ideas (in)
+* category tree depending on order of categories
 * define a category spreading over multiple activities to come (BEGIN / END)
 * use quickcheck for testing
 * profile program with a lot of data and see differences when copying or not
 * use only one continuous file with all the days
+* need to indicate how long the activities are relative to each other
+* @today to specify current date, but how to deal with modifications on the day after?
+* add coefficient to length of task
+* handle 'until when' time as input instead of duration
+* branching in activities (two possible choices)
+* deal with time shift correctly
