@@ -13,7 +13,7 @@ use serde_derive::Serialize;
 use toml::de::Error;
 
 use crate::{TiroError, TiroResult};
-use crate::parse::ParseState;
+use crate::parse_state::ParseState;
 
 pub type Category = str;
 

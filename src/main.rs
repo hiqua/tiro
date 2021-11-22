@@ -29,6 +29,7 @@ mod parse;
 mod pretty_print;
 mod summary;
 mod versioning;
+mod parse_state;
 
 type Writer = (Box<dyn Write>, bool);
 

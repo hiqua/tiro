@@ -19,6 +19,7 @@ use crate::config::{Config, MetaCategory, Quadrant, update_parse_state_from_conf
 use crate::config::MetaCategory::{Quad, RegularCategory};
 use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
+use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
 
 #[cfg(test)]
@@ -42,18 +43,6 @@ mod tests {
 impl From<ParseIntError> for TiroError {
     fn from(e: ParseIntError) -> Self {
         TiroError { e: e.to_string() }
-    }
-}
-
-pub struct ParseState {
-    pub categories_to_quadrant: HashMap<String, Quadrant>,
-}
-
-impl ParseState {
-    pub fn new() -> ParseState {
-        ParseState {
-            categories_to_quadrant: HashMap::new(),
-        }
     }
 }
 
@@ -169,7 +158,7 @@ pub fn get_all_life_lapses(
     all_life_lapses = all_life_lapses
         .into_iter()
         .skip_while(|ll| ll.start < start_time)
-        // XXX: why can they be empty at this point?
+        // Empty if only contained activities before starting time
         .filter(|ll| !ll.is_empty())
         .collect();
 
@@ -192,7 +181,7 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
 
     update_parse_state_from_config(config, &mut parse_state).expect("");
 
-    let list_of_pr = update_all_quadrants(list_of_pr, &parse_state);
+    let list_of_pr = parse_state.update_category_quadrants(list_of_pr);
 
     let tiro_tokens = tokens_from_timed_lpr(list_of_pr, start_time);
 
@@ -213,35 +202,6 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
     result.push(current_ll);
 
     result
-}
-
-pub fn look_for_seen_quadrant(chunk: &LifeChunk, pst: &ParseState) -> Option<Quadrant> {
-    chunk
-        .categories
-        .iter()
-        .map(|c| pst.categories_to_quadrant.get(c).copied())
-        .flatten()
-        .next()
-}
-
-pub fn update_quadrant(mut chunk: LifeChunk, pst: &ParseState) -> LifeChunk {
-    match look_for_seen_quadrant(&chunk, pst) {
-        None => chunk,
-        Some(q) => {
-            chunk.quadrant = q;
-            chunk
-        }
-    }
-}
-
-pub fn register_categories_from_life_chunk(chunk: &LifeChunk, pst: &mut ParseState) {
-    if chunk.quadrant == Default::default() {
-        return;
-    }
-    for cat in &chunk.categories {
-        pst.categories_to_quadrant
-            .insert(cat.to_string(), chunk.quadrant);
-    }
 }
 
 pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
@@ -372,19 +332,17 @@ fn parse_all_lines(it: &mut Iter<String>) -> Vec<LineParseResult> {
     let mut list_of_pr = vec![];
 
     for s in it {
+        if is_noop(s) {
+            continue;
+        }
         match process_line(s) {
-            Some(LineParseResult::Date { date }) => list_of_pr.push(LineParseResult::Date { date }),
-            // Some(LineParseError { line }) => {
-            //     if log_errors {
-            //         println!("Found faulty line in input:\n{}\n", line);
-            //     }
-            // }
-            Some(lp) => {
+            // TODO: shouldn't unwrap
+            LineParseResult::Date { date } => list_of_pr.push(LineParseResult::Date { date }),
+            lp => {
                 if !list_of_pr.is_empty() {
                     list_of_pr.push(lp)
                 }
             }
-            None => {}
         }
     }
 
@@ -397,38 +355,12 @@ fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
     let mut parse_state = ParseState::new();
     for lpr in list_of_timed_pr {
         if let LineParseResult::Lc { life_chunk: lc } = lpr {
-            register_categories_from_life_chunk(lc, &mut parse_state);
+            parse_state.register_categories_from_life_chunk(lc);
         }
     }
     parse_state
 }
 
-fn update_lpr_quadrant(lpr: LineParseResult, parse_state: &ParseState) -> LineParseResult {
-    if let LineParseResult::Lc { life_chunk: lc } = lpr {
-        if !lc.user_provided_quadrant {
-            let new_lc = update_quadrant(lc, parse_state);
-            LineParseResult::Lc { life_chunk: new_lc }
-        } else {
-            LineParseResult::Lc { life_chunk: lc }
-        }
-    } else {
-        lpr
-    }
-}
-
-/// Updates the state to contain the quadrant matching the categories
-fn update_all_quadrants(
-    list_of_timed_pr: Vec<LineParseResult>,
-    parse_state: &ParseState,
-) -> Vec<LineParseResult> {
-    let mut new_list_of_pr = vec![];
-
-    for lpr in list_of_timed_pr {
-        new_list_of_pr.push(update_lpr_quadrant(lpr, parse_state));
-    }
-
-    new_list_of_pr
-}
 
 fn tokens_from_timed_lpr(
     list_of_pr: Vec<LineParseResult>,
@@ -450,26 +382,21 @@ fn tokens_from_timed_lpr(
             LineParseResult::Date { date } => {
                 curr_time = date;
                 tiro_tokens.push(TiroToken::Date { date })
-            } // LineParseResult::LineParseError { .. } => {}
+            }
         };
     }
 
     tiro_tokens
 }
 
-/// Parse a line from the input
-fn process_line(line: &str) -> Option<LineParseResult> {
-    if line.starts_with('#') || line.trim().is_empty() {
-        return None;
-    }
 
-    if let Some(date) = parse_date(line) {
-        Some(Date { date })
-    } else {
-        Some(Lc {
-            life_chunk: get_life_chunk(line),
-        })
-    }
+/// Parse a line from the input
+fn process_line(line: &str) -> LineParseResult {
+    parse_date(line).map(|date| Date { date }).unwrap_or(Lc { life_chunk: get_life_chunk(line) })
+}
+
+fn is_noop(line: &str) -> bool {
+    line.starts_with('#') || line.trim().is_empty()
 }
 
 /// Whether a token is a date
