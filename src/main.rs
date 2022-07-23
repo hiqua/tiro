@@ -19,7 +19,6 @@ use crate::input::{delay, get_all_lines, get_writers, write_plan, write_summary}
 use crate::notification::spawn_notification_thread;
 use crate::parse::{get_all_life_lapses, TimedLifeChunk};
 use crate::summary::{compute_all_summaries, merge_summaries_on_same_date};
-use crate::versioning::full_version;
 
 mod config;
 mod input;
@@ -28,7 +27,6 @@ mod notification;
 mod parse;
 mod pretty_print;
 mod summary;
-mod versioning;
 mod parse_state;
 
 type Writer = (Box<dyn Write>, bool);
@@ -141,7 +139,7 @@ fn watch_main_loop(config: &Config) -> TiroResult<()> {
 
 fn main() -> TiroResult<()> {
     let yaml = load_yaml!("cli.yml");
-    let matches = App::from_yaml(yaml).version(&*full_version()).get_matches();
+    let matches = App::from_yaml(yaml).version(crate_version!()).get_matches();
 
     let config = load_config_from_matches(&matches);
     if config.watch {
