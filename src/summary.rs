@@ -5,7 +5,7 @@ use time::Duration;
 
 use crate::config::Category;
 use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
-use chrono::{Date, DateTime, Local};
+use chrono::{Date, Datelike, DateTime, Local};
 use std::ops::Add;
 
 pub(crate) type Summary = HashMap<String, Duration>;
@@ -32,20 +32,20 @@ fn merge_summaries(s1: Summary, s2: Summary) -> Summary {
 pub fn merge_summaries_on_same_date(
     summaries: Vec<(Timestamp, Summary)>,
 ) -> Vec<(Timestamp, Summary)> {
-    let mut cur_date = None;
+    let mut current_date = None;
 
     // XXX: ugly
     let mut new_summaries: Vec<_> = vec![(Local::now(), HashMap::new())];
 
-    for (date, summary) in summaries {
+    for (timestamp, summary) in summaries {
         assert!(!new_summaries.is_empty());
-        if Some(date.date()) == cur_date || cur_date.is_none() {
+        if Some(timestamp.date()) == current_date || current_date.is_none() {
             let (_, last) = new_summaries.pop().unwrap();
-            new_summaries.push((date, merge_summaries(last, summary)));
-            cur_date = Some(date.date());
+            new_summaries.push((timestamp, merge_summaries(last, summary)));
         } else {
-            new_summaries.push((date, summary));
+            new_summaries.push((timestamp, summary));
         }
+        current_date = Some(timestamp.date());
     }
 
     new_summaries
