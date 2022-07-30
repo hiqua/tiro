@@ -1,4 +1,6 @@
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
+use std::iter::Sum;
 
 use colored::Colorize;
 use time::Duration;
@@ -27,6 +29,14 @@ fn merge_summaries(s1: Summary, s2: Summary) -> Summary {
         s.insert(k.clone(), new_duration);
     }
     s
+}
+
+pub fn merge_all_summaries(summaries: &Vec<Summary>) -> Summary {
+    let mut result : Summary = HashMap::new();
+    for s in summaries {
+        result = merge_summaries(result, s.clone());
+    }
+    result
 }
 
 pub fn merge_summaries_on_same_date(
@@ -73,9 +83,17 @@ pub fn format_category_summary(
     ctg_summary: Vec<CategorySummary>,
     date: Date<Local>,
 ) -> Vec<String> {
+    format_category_summary_with_note(ctg_summary,date,"(summary)")
+}
+
+pub fn format_category_summary_with_note(
+    ctg_summary: Vec<CategorySummary>,
+    date: Date<Local>,
+    note: &str
+) -> Vec<String> {
     let mut lines = vec![];
     let f_date = date.to_string().bold();
-    lines.push(format!("{} (summary)", f_date));
+    lines.push(format!("{} {}", f_date, note));
     for ctxt in ctg_summary {
         lines.push(format!("{}: {}", ctxt.name, format_duration(ctxt.duration)));
     }
@@ -83,6 +101,7 @@ pub fn format_category_summary(
 
     lines
 }
+
 
 pub fn compute_context_summary(contexts: &HashMap<String, Duration>) -> Vec<CategorySummary> {
     let mut kk: Vec<&String> = Vec::new();

@@ -15,7 +15,7 @@ use clap::App;
 use notify::{watcher, RecursiveMode, Watcher};
 
 use crate::config::{load_config_from_matches, Config};
-use crate::input::{delay, get_all_lines, get_writers, write_plan, write_summary};
+use crate::input::{delay, get_all_lines, get_writers, write_plan, write_summary, write_summary_of_all_summaries};
 use crate::notification::spawn_notification_thread;
 use crate::parse::{get_all_life_lapses, TimedLifeChunk};
 use crate::summary::{compute_all_summaries, merge_summaries_on_same_date};
@@ -35,6 +35,7 @@ type Writer = (Box<dyn Write>, bool);
 pub struct TiroError {
     e: String,
 }
+
 
 type TiroResult<T> = Result<T, TiroError>;
 
@@ -65,6 +66,10 @@ fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)
     write_plan(&all_life_lapses, plan_writers)?;
 
     write_summary(&all_summaries, summary_writers)?;
+
+    // TODO: fix duplicate, need to look into borrowing rules etc.
+    let (_, summary_writers) = get_writers(start_time, config);
+    write_summary_of_all_summaries(&all_summaries, summary_writers)?;
     // END WRITE
 
     // WATCHING
