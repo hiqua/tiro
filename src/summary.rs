@@ -10,6 +10,32 @@ use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
 use chrono::{Date, Datelike, DateTime, Local};
 use std::ops::Add;
 
+
+#[cfg(test)]
+mod tests {
+    use chrono::{Local, TimeZone};
+    use time::Duration;
+    use crate::summary::format_duration;
+
+    #[test]
+    fn format_duration_longer_than_a_day() {
+        let duration = Duration::hours(25);
+        assert_eq!(
+            format_duration(duration),
+            "25h00"
+        );
+    }
+
+    #[test]
+    fn format_duration_prepends_a_0() {
+        let duration = Duration::hours(2) + Duration::minutes(15);
+        assert_eq!(
+            format_duration(duration),
+            "02h15"
+        );
+    }
+}
+
 pub(crate) type Summary = HashMap<String, Duration>;
 
 pub(crate) type Timestamp = DateTime<Local>;
@@ -126,11 +152,6 @@ fn format_duration(d: Duration) -> String {
     let mut buf = String::with_capacity(5);
     let m = (d.num_minutes() % 60).to_string();
     let h = d.num_hours().to_string();
-    assert_eq!(
-        d.num_days(),
-        0,
-        "Activities lasting longer than 24h are not supported."
-    );
 
     if h.len() == 1 {
         buf.push('0');
