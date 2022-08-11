@@ -150,7 +150,7 @@ fn color_line(s: String, q: Quadrant) -> String {
         Q5 => Color::Green,
         Q6 => Color::White,
     };
-    return format!("{}", s.color(c));
+    format!("{}", s.color(c))
 }
 
 fn get_warning_overlapping() -> String {

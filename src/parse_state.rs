@@ -42,8 +42,7 @@ impl ParseState {
         chunk
             .categories
             .iter()
-            .map(|c| self.categories_to_quadrant.get(c).copied())
-            .flatten()
+            .filter_map(|c| self.categories_to_quadrant.get(c).copied())
             .next()
     }
 

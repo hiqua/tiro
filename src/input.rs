@@ -77,7 +77,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<
     // ":" does not seem to work well with Android
     let filetime = Local::now()
         .to_rfc3339_opts(SecondsFormat::Nanos, true)
-        .replace(":", "_");
+        .replace(':', "_");
     let mut plan_writers = vec![];
     let mut summary_writers = vec![];
 
