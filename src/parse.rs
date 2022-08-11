@@ -9,18 +9,18 @@ use std::path::PathBuf;
 use std::slice::Iter;
 use std::str::FromStr;
 
-use chrono::{Local, TimeZone};
 use chrono::offset::LocalResult;
 use chrono::prelude::*;
+use chrono::{Local, TimeZone};
 use time::Duration;
 
-use crate::{TiroError, TiroResult};
-use crate::config::{Config, MetaCategory, Quadrant, update_parse_state_from_config};
 use crate::config::MetaCategory::{Quad, RegularCategory};
+use crate::config::{update_parse_state_from_config, Config, MetaCategory, Quadrant};
 use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
 use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
+use crate::{TiroError, TiroResult};
 
 #[cfg(test)]
 mod tests {
@@ -71,7 +71,7 @@ impl LifeLapse {
             .fold(Duration::hours(0), |sum, t| sum.add(t.life_chunk.duration))
     }
 
-    pub fn extend<I: IntoIterator<Item=TimedLifeChunk>>(&mut self, iter: I) {
+    pub fn extend<I: IntoIterator<Item = TimedLifeChunk>>(&mut self, iter: I) {
         self.tokens.extend(iter);
         let d = self.total_duration();
         self.end = self.start + d;
@@ -361,7 +361,6 @@ fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
     parse_state
 }
 
-
 fn tokens_from_timed_lpr(
     list_of_pr: Vec<LineParseResult>,
     start_time: Timestamp,
@@ -389,10 +388,11 @@ fn tokens_from_timed_lpr(
     tiro_tokens
 }
 
-
 /// Parse a line from the input
 fn process_line(line: &str) -> LineParseResult {
-    parse_date(line).map(|date| Date { date }).unwrap_or(Lc { life_chunk: get_life_chunk(line) })
+    parse_date(line).map(|date| Date { date }).unwrap_or(Lc {
+        life_chunk: get_life_chunk(line),
+    })
 }
 
 fn is_noop(line: &str) -> bool {

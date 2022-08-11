@@ -7,11 +7,14 @@ use std::time::Duration as StdDuration;
 
 use chrono::{Local, SecondsFormat};
 
-use crate::{merge_summaries_on_same_date, TiroResult, Writer};
 use crate::config::Config;
-use crate::parse::{LifeLapse, read_lines_from_file, read_stdin_lines};
+use crate::parse::{read_lines_from_file, read_stdin_lines, LifeLapse};
 use crate::pretty_print::{format_lifelapses, get_output_writer, write_to};
-use crate::summary::{compute_context_summary, format_category_summary, format_category_summary_with_note, merge_all_summaries, Summary, Timestamp};
+use crate::summary::{
+    compute_context_summary, format_category_summary, format_category_summary_with_note,
+    merge_all_summaries, Summary, Timestamp,
+};
+use crate::{merge_summaries_on_same_date, TiroResult, Writer};
 
 pub fn write_plan(
     all_life_lapses: &[LifeLapse],
@@ -43,15 +46,22 @@ pub fn write_summary(
     Ok(())
 }
 
-pub fn write_summary_of_all_summaries(all_summaries: &[(Timestamp, Summary)],
-                                      mut summary_writers: Vec<(Box<dyn Write>, bool)>,
+pub fn write_summary_of_all_summaries(
+    all_summaries: &[(Timestamp, Summary)],
+    mut summary_writers: Vec<(Box<dyn Write>, bool)>,
 ) -> TiroResult<()> {
-    let only_summaries: Vec<Summary> =all_summaries.iter().map(|(_, s)| s.clone()).collect();
+    let only_summaries: Vec<Summary> = all_summaries.iter().map(|(_, s)| s.clone()).collect();
     let summary: Summary = merge_all_summaries(&only_summaries);
     for (ref mut summary_writer, summary_color) in &mut summary_writers {
         let date = Local::now().date();
         write_to(
-            || format_category_summary_with_note(compute_context_summary(&summary), date, "(all past summaries)"),
+            || {
+                format_category_summary_with_note(
+                    compute_context_summary(&summary),
+                    date,
+                    "(all past summaries)",
+                )
+            },
             summary_writer.borrow_mut(),
             *summary_color,
         )?;
@@ -59,7 +69,6 @@ pub fn write_summary_of_all_summaries(all_summaries: &[(Timestamp, Summary)],
     // TODO write to output
     Ok(())
 }
-
 
 pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<Writer>) {
     let summary_out = config.summary_out.as_ref();
@@ -105,7 +114,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<
 }
 
 pub fn get_all_lines(
-    file_paths: Box<dyn Iterator<Item=PathBuf>>,
+    file_paths: Box<dyn Iterator<Item = PathBuf>>,
 ) -> TiroResult<Vec<Vec<String>>> {
     let mut all_activities_line = vec![];
 

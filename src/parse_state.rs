@@ -15,7 +15,10 @@ impl ParseState {
     }
 
     /// Updates the state to contain the quadrant matching the categories
-    pub fn update_category_quadrants(&self, list_of_timed_pr: Vec<LineParseResult>) -> Vec<LineParseResult> {
+    pub fn update_category_quadrants(
+        &self,
+        list_of_timed_pr: Vec<LineParseResult>,
+    ) -> Vec<LineParseResult> {
         let mut new_list_of_pr = vec![];
 
         for lpr in list_of_timed_pr {
@@ -25,13 +28,13 @@ impl ParseState {
         new_list_of_pr
     }
 
-
     pub fn register_categories_from_life_chunk(&mut self, chunk: &LifeChunk) {
         if chunk.quadrant == Default::default() {
             return;
         }
         for cat in &chunk.categories {
-            self.categories_to_quadrant.insert(cat.to_string(), chunk.quadrant);
+            self.categories_to_quadrant
+                .insert(cat.to_string(), chunk.quadrant);
         }
     }
 
@@ -53,7 +56,6 @@ impl ParseState {
             }
         }
     }
-
 
     fn update_lpr_quadrant(&self, lpr: LineParseResult) -> LineParseResult {
         if let LineParseResult::Lc { life_chunk: lc } = lpr {

@@ -7,32 +7,25 @@ use time::Duration;
 
 use crate::config::Category;
 use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
-use chrono::{Date, Datelike, DateTime, Local};
+use chrono::{Date, DateTime, Datelike, Local};
 use std::ops::Add;
-
 
 #[cfg(test)]
 mod tests {
+    use crate::summary::format_duration;
     use chrono::{Local, TimeZone};
     use time::Duration;
-    use crate::summary::format_duration;
 
     #[test]
     fn format_duration_longer_than_a_day() {
         let duration = Duration::hours(25);
-        assert_eq!(
-            format_duration(duration),
-            "25h00"
-        );
+        assert_eq!(format_duration(duration), "25h00");
     }
 
     #[test]
     fn format_duration_prepends_a_0() {
         let duration = Duration::hours(2) + Duration::minutes(15);
-        assert_eq!(
-            format_duration(duration),
-            "02h15"
-        );
+        assert_eq!(format_duration(duration), "02h15");
     }
 }
 
@@ -58,7 +51,7 @@ fn merge_summaries(s1: Summary, s2: Summary) -> Summary {
 }
 
 pub fn merge_all_summaries(summaries: &Vec<Summary>) -> Summary {
-    let mut result : Summary = HashMap::new();
+    let mut result: Summary = HashMap::new();
     for s in summaries {
         result = merge_summaries(result, s.clone());
     }
@@ -109,13 +102,13 @@ pub fn format_category_summary(
     ctg_summary: Vec<CategorySummary>,
     date: Date<Local>,
 ) -> Vec<String> {
-    format_category_summary_with_note(ctg_summary,date,"(summary)")
+    format_category_summary_with_note(ctg_summary, date, "(summary)")
 }
 
 pub fn format_category_summary_with_note(
     ctg_summary: Vec<CategorySummary>,
     date: Date<Local>,
-    note: &str
+    note: &str,
 ) -> Vec<String> {
     let mut lines = vec![];
     let f_date = date.to_string().bold();
@@ -127,7 +120,6 @@ pub fn format_category_summary_with_note(
 
     lines
 }
-
 
 pub fn compute_context_summary(contexts: &HashMap<String, Duration>) -> Vec<CategorySummary> {
     let mut kk: Vec<&String> = Vec::new();

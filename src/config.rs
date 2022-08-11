@@ -12,8 +12,8 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use toml::de::Error;
 
-use crate::{TiroError, TiroResult};
 use crate::parse_state::ParseState;
+use crate::{TiroError, TiroResult};
 
 pub type Category = str;
 
@@ -77,7 +77,8 @@ mod tests {
             r#"
             p = "/$MOBILE_DIR/0_planning/activities.txt"
                 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         println!("{:?}", config);
         let mut new_p = PathBuf::new();
@@ -120,7 +121,7 @@ mod tests {
                 ]
                 "#,
         )
-            .unwrap();
+        .unwrap();
         println!("{:?}", config.activity_paths);
         println!("{:?}", config.quadrants);
     }
