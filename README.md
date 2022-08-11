@@ -55,9 +55,9 @@ tiro -a example/activities.txt
 * handle timestamps with only hours given
 
 ### TODO
+* allow to add some activities without any starting time, e.g. to take into account 20min of work done in the morning without specifics
 * write tests in every file
 * sanity check on date of day: if distance of activities with current date is more than 20h, something fishy, warn about it
-* improve packaging (available on work computers)
 * option to hide categories from a subcategory, e.g. work
 * option to output only categories (@work)
 * try to use fzf to get autocompletion for tiro files
@@ -72,6 +72,8 @@ tiro -a example/activities.txt
 * multiline description
 * detect if several quadrant for one category
 * make colors configurable
+* figure out why I need openssl-dev and if I can get rid of it
+* ignore non existing input files
 
 ### Ideas (in)
 * category tree depending on order of categories
