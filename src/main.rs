@@ -47,7 +47,6 @@ impl fmt::Display for TiroError {
 }
 
 fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)> {
-    let notify = config.notify;
     // START PARSE
     let file_paths = config.get_file_paths();
     let all_activities_line = get_all_lines(Box::new(file_paths.into_iter()))?;
@@ -75,7 +74,7 @@ fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)
 
     // WATCHING
     let (tx, rx) = mpsc::channel();
-    let handle = if notify {
+    let handle = if config.notify {
         // XXX: should exit early if lifelapses are incompatible, otherwise this will be buggy
         let mut q: Vec<TimedLifeChunk> = vec![];
         for ll in all_life_lapses {
