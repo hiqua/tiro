@@ -70,7 +70,7 @@ pub fn format_lifelapses(lifelapses: &[LifeLapse]) -> Vec<String> {
 /// Need this producer because the coloring won't be flexible otherwise
 pub fn write_to(
     output_producer: impl Fn() -> Vec<String>,
-    writer: &mut std::boxed::Box<dyn std::io::Write>,
+    writer: &mut Box<dyn Write>,
     color: bool,
 ) -> Result<()> {
     if !color {

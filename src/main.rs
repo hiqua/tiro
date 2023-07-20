@@ -52,12 +52,10 @@ fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)
     let all_activities_line = get_all_lines(Box::new(file_paths.into_iter()))?;
 
     let (start_time, all_life_lapses) = get_all_life_lapses(all_activities_line, config);
-
     // END PARSE
 
     // COMPUTE SUMMARIES
     let all_summaries = compute_all_summaries(&all_life_lapses);
-
     let all_summaries = merge_summaries_on_same_date(all_summaries);
 
     // WRITE
@@ -73,7 +71,7 @@ fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)
     // END WRITE
 
     // WATCHING
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = channel();
     let handle = if config.notify {
         // XXX: should exit early if lifelapses are incompatible, otherwise this will be buggy
         let mut q: Vec<TimedLifeChunk> = vec![];

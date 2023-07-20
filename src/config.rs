@@ -24,7 +24,7 @@ impl From<std::io::Error> for TiroError {
 }
 
 impl From<Error> for TiroError {
-    fn from(e: toml::de::Error) -> Self {
+    fn from(e: Error) -> Self {
         TiroError { e: e.to_string() }
     }
 }
@@ -50,7 +50,7 @@ impl Config {
     }
 }
 
-/// This is needed because the toml crate cannot parse enum directly.
+/// This is needed because the Toml crate cannot parse enum directly.
 #[derive(Debug, Serialize, Deserialize)]
 struct RawConfig {
     activity_paths: Vec<PathBuf>,

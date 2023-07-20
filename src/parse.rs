@@ -119,7 +119,6 @@ pub struct TimedLifeChunk {
 pub enum LineParseResult {
     Lc { life_chunk: LifeChunk },
     Date { date: Timestamp },
-    // LineParseError { line: String },
 }
 
 #[derive(Clone, Debug)]
@@ -170,7 +169,7 @@ pub fn get_all_life_lapses(
 pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse> {
     let list_of_pr = parse_all_lines(&mut it);
 
-    let start_time = if let Some(LineParseResult::Date { date }) = list_of_pr.first() {
+    let start_time = if let Some(Date { date }) = list_of_pr.first() {
         *date
     } else {
         assert!(list_of_pr.is_empty());
@@ -337,7 +336,7 @@ fn parse_all_lines(it: &mut Iter<String>) -> Vec<LineParseResult> {
         }
         match process_line(s) {
             // TODO: shouldn't unwrap
-            LineParseResult::Date { date } => list_of_pr.push(LineParseResult::Date { date }),
+            Date { date } => list_of_pr.push(Date { date }),
             lp => {
                 if !list_of_pr.is_empty() {
                     list_of_pr.push(lp)
@@ -354,7 +353,7 @@ fn parse_all_lines(it: &mut Iter<String>) -> Vec<LineParseResult> {
 fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
     let mut parse_state = ParseState::new();
     for lpr in list_of_timed_pr {
-        if let LineParseResult::Lc { life_chunk: lc } = lpr {
+        if let Lc { life_chunk: lc } = lpr {
             parse_state.register_categories_from_life_chunk(lc);
         }
     }
@@ -369,7 +368,7 @@ fn tokens_from_timed_lpr(
     let mut curr_time = start_time;
     for lpr in list_of_pr {
         match lpr {
-            LineParseResult::Lc { life_chunk } => {
+            Lc { life_chunk } => {
                 let duration = life_chunk.duration;
                 let tlc = TimedLifeChunk {
                     start: curr_time,
@@ -378,7 +377,7 @@ fn tokens_from_timed_lpr(
                 curr_time = curr_time + duration;
                 tiro_tokens.push(TiroToken::Tlc { tlc })
             }
-            LineParseResult::Date { date } => {
+            Date { date } => {
                 curr_time = date;
                 tiro_tokens.push(TiroToken::Date { date })
             }
@@ -401,6 +400,6 @@ fn is_noop(line: &str) -> bool {
 
 /// Whether a token is a date
 fn is_a_date_token(t: &LineParseResult) -> bool {
-    let d = LineParseResult::Date { date: Local::now() };
+    let d = Date { date: Local::now() };
     discriminant(t) == discriminant(&d)
 }
