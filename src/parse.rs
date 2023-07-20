@@ -46,7 +46,9 @@ impl From<ParseIntError> for TiroError {
     }
 }
 
-/// Invariant: start == tokens[0].start
+/// A continuous series of life chunks.
+///
+/// Invariant: `start == tokens[0].start`.
 /// Invariant: end - start == sum(tok.duration for tok in tokens)
 /// XXX: enforce these by making the fields private and using methods
 #[derive(Clone, Debug)]

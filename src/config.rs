@@ -29,6 +29,7 @@ impl From<Error> for TiroError {
     }
 }
 
+/// The global config.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Config {
     pub(crate) quadrants: HashMap<Quadrant, Vec<String>>,
@@ -50,7 +51,9 @@ impl Config {
     }
 }
 
-/// This is needed because the Toml crate cannot parse enum directly.
+/// This is needed as the intermediate object to deserialize because the Toml
+/// crate cannot parse the enum Quadrant directly in this case, as it's part of
+/// a map.
 #[derive(Debug, Serialize, Deserialize)]
 struct RawConfig {
     activity_paths: Vec<PathBuf>,
@@ -147,7 +150,6 @@ pub enum Quadrant {
     #[default]
     Q6,
 }
-
 
 impl FromStr for Quadrant {
     type Err = TiroError;

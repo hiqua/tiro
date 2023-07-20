@@ -29,8 +29,10 @@ mod tests {
     }
 }
 
+/// A summary matching activities to their total duration in a day.
 pub(crate) type Summary = HashMap<String, Duration>;
 
+/// The timestamp of activities.
 pub(crate) type Timestamp = DateTime<Local>;
 
 pub struct CategorySummary<'a> {
@@ -63,8 +65,7 @@ pub fn merge_summaries_on_same_date(
 ) -> Vec<(Timestamp, Summary)> {
     let mut current_date = None;
 
-    // XXX: ugly
-    let mut new_summaries: Vec<_> = vec![(Local::now(), HashMap::new())];
+    let mut new_summaries = vec![(Local::now(), HashMap::new())];
 
     for (timestamp, summary) in summaries {
         assert!(!new_summaries.is_empty());
