@@ -48,7 +48,7 @@ pub fn get_output_writer(
                 )
             } else {
                 (
-                    Box::new(File::create(&path).unwrap()) as Box<dyn Write>,
+                    Box::new(File::create(path).unwrap()) as Box<dyn Write>,
                     false,
                 )
             }

@@ -137,21 +137,17 @@ pub enum MetaCategory<'a> {
     },
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Copy,Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Quadrant {
     Q1,
     Q2,
     Q3,
     Q4,
     Q5,
+    #[default]
     Q6,
 }
 
-impl Default for Quadrant {
-    fn default() -> Self {
-        Quadrant::Q6
-    }
-}
 
 impl FromStr for Quadrant {
     type Err = TiroError;
