@@ -3,6 +3,12 @@
 **N.B.**: this code was written mostly to become familiar with Rust, and as
 such is not idiomatic / clean etc.
 
+## Installation
+
+```
+cargo install tiro --locked
+```
+
 ## Example
 
 ```
