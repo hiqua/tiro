@@ -140,7 +140,7 @@ pub enum MetaCategory<'a> {
     },
 }
 
-#[derive(Copy,Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Copy, Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Quadrant {
     Q1,
     Q2,

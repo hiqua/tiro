@@ -1,6 +1,5 @@
 use std::borrow::BorrowMut;
 use std::io::Write;
-use std::iter::Sum;
 use std::path::PathBuf;
 use std::thread::sleep;
 use std::time::Duration as StdDuration;
@@ -14,7 +13,13 @@ use crate::summary::{
     compute_context_summary, format_category_summary, format_category_summary_with_note,
     merge_all_summaries, Summary, Timestamp,
 };
-use crate::{merge_summaries_on_same_date, TiroResult, Writer};
+use crate::{TiroResult, Writer};
+
+pub struct Writers {
+    pub plan_writers: Vec<Writer>,
+    pub summary_writers: Vec<Writer>,
+    pub global_summary_writers: Vec<Writer>,
+}
 
 pub fn write_plan(
     all_life_lapses: &[LifeLapse],
@@ -46,7 +51,7 @@ pub fn write_summary(
     Ok(())
 }
 
-pub fn write_summary_of_all_summaries(
+pub fn write_global_summary(
     all_summaries: &[(Timestamp, Summary)],
     mut summary_writers: Vec<(Box<dyn Write>, bool)>,
 ) -> TiroResult<()> {
@@ -70,7 +75,7 @@ pub fn write_summary_of_all_summaries(
     Ok(())
 }
 
-pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<Writer>) {
+pub fn get_writers(start_time: Timestamp, config: &Config) -> Writers {
     let summary_out = config.summary_out.as_ref();
     let plan_out = config.plan_out.as_ref();
 
@@ -80,6 +85,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<
         .replace(':', "_");
     let mut plan_writers = vec![];
     let mut summary_writers = vec![];
+    let mut global_summary_writers = vec![];
 
     let quiet = config.quiet;
     if !quiet {
@@ -101,6 +107,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<
         ));
     }
 
+    // TODO: distinguish between local / global summary
     if let Some(s) = summary_out {
         summary_writers.push(get_output_writer(
             Some(s.as_str()),
@@ -108,9 +115,19 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> (Vec<Writer>, Vec<
             &filetime,
             start_time,
         ));
+        global_summary_writers.push(get_output_writer(
+            Some(s.as_str()),
+            "global_summary",
+            &filetime,
+            start_time,
+        ));
     }
 
-    (plan_writers, summary_writers)
+    Writers {
+        plan_writers,
+        summary_writers,
+        global_summary_writers,
+    }
 }
 
 pub fn get_all_lines(
