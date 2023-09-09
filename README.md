@@ -74,6 +74,7 @@ tiro -a example/activities.txt
 * make colors configurable
 * figure out why I need openssl-dev and if I can get rid of it
 * ignore non existing input files
+* use anyhow for errors instead of using custom errors
 
 ### Ideas (in)
 * category tree depending on order of categories
