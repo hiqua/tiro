@@ -151,7 +151,7 @@ pub fn get_all_life_lapses(
             let life_lapses = parse_activities(activities_lines.iter(), config);
             all_life_lapses.extend(life_lapses);
         }
-        all_life_lapses.get(0).unwrap().start
+        all_life_lapses.first().unwrap().start
     };
 
     all_life_lapses.sort_by_key(|ll| ll.start);

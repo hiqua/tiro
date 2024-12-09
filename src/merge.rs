@@ -43,7 +43,6 @@ struct Interval {
 }
 
 /// these functions are expensive with sorting and copying
-
 fn are_compatible(a: Vec<&Interval>) -> bool {
     let mut s = vec![];
     {
@@ -52,7 +51,7 @@ fn are_compatible(a: Vec<&Interval>) -> bool {
     }
 
     for pair in s.windows(2) {
-        let i1 = pair.get(0).unwrap();
+        let i1 = pair.first().unwrap();
         let i2 = pair.get(1).unwrap();
         if i1.end > i2.start {
             return false;
