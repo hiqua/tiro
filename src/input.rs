@@ -96,6 +96,12 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> Writers {
             &filetime,
             start_time,
         ));
+        global_summary_writers.push(get_output_writer(
+            Some("-"),
+            "global_summary",
+            &filetime,
+            start_time,
+        ));
     }
 
     if let Some(p) = plan_out {
