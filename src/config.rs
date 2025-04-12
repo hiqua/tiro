@@ -206,6 +206,14 @@ fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
         .iter()
         .map(|p| p.as_path())
         .map(substitute_env_variable)
+        .filter(|f| {
+            if f.exists() {
+                true
+            } else {
+                eprintln!("Filtered out non-existent activity file: {:?}", f);
+                false
+            }
+        })
         .map(|f| {
             f.canonicalize()
                 .expect("Could not canonicalize an activity path.")
