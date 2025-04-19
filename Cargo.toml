@@ -1,6 +1,6 @@
 [package]
 name = "tiro"
-version = "0.3.6"
+version = "0.3.7"
 authors = ["Quentin Hibon <qh.public@yahoo.com>"]
 edition = "2018"
 repository = "https://github.com/hiqua/tiro"
