@@ -30,8 +30,26 @@ tiro -a example/activities.txt
 * First symbols of the line should determine what the line is
     * Easier and faster, (to parse, but also to edit)
 
-## (Non-Cargo) Requirements
+
+## Dev
+
+### (Non-Cargo) Requirements
 * libdbus
+
+### Building
+
+```
+watch -c cargo --color=always build
+```
+
+### Releasing
+
+```
+./release.sh
+```
+
+and copy-paste the listed commands, after inspection.
+
 
 
 ## Future Features (Ideas)
