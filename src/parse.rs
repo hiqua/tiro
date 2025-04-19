@@ -139,8 +139,7 @@ impl LifeChunk {
     }
 }
 
-/// The first vector of activities has a special role, in that it defines the starting time.
-/// Activities occurring before this starting time (in other activity files) will be ignored.
+/// The starting time is the earli
 pub fn get_all_life_lapses(
     all_activities_line: Vec<Vec<String>>,
     config: &Config,
@@ -151,7 +150,7 @@ pub fn get_all_life_lapses(
             let life_lapses = parse_activities(activities_lines.iter(), config);
             all_life_lapses.extend(life_lapses);
         }
-        all_life_lapses.first().unwrap().start
+        all_life_lapses.iter().map(|ll| ll.start).min().unwrap()
     };
 
     all_life_lapses.sort_by_key(|ll| ll.start);
