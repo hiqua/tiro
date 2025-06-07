@@ -12,9 +12,23 @@ use std::ops::Add;
 
 #[cfg(test)]
 mod tests {
-    use crate::summary::format_duration;
-    use chrono::{Local, TimeZone};
+    use crate::summary::{format_duration, compute_summary, Summary, compute_context_summary, CategorySummary, format_category_summary, format_category_summary_with_note};
+    use crate::parse::{LifeChunk, TimedLifeChunk};
+    use crate::config::Quadrant;
+    use chrono::{Local, TimeZone, Utc, Date, Datelike};
     use time::Duration;
+    use std::collections::HashMap;
+    use crate::parse::get_life_chunk;
+    use colored::Colorize; // For asserting bolded dates
+
+    // Helper to create TimedLifeChunk for tests using get_life_chunk
+    // The start time of TimedLifeChunk is not used by compute_summary, so it can be arbitrary.
+    fn create_timed_chunk_from_line(line_for_get_life_chunk: &str) -> TimedLifeChunk {
+        TimedLifeChunk {
+            start: Local::now(), // Arbitrary, not used by the function under test
+            life_chunk: get_life_chunk(line_for_get_life_chunk),
+        }
+    }
 
     #[test]
     fn format_duration_longer_than_a_day() {
@@ -26,6 +40,199 @@ mod tests {
     fn format_duration_prepends_a_0() {
         let duration = Duration::hours(2) + Duration::minutes(15);
         assert_eq!(format_duration(duration), "02h15");
+    }
+
+    #[test]
+    fn test_compute_summary_basic() {
+        let timed_life_chunks = vec![
+            create_timed_chunk_from_line("0 30 Task 1 @work @projA"), // Duration 30m, cats @work, @projA
+            create_timed_chunk_from_line("1 0 Task 2 @work"),        // Duration 60m, cats @work
+            create_timed_chunk_from_line("0 15 Task 3 @home"),       // Duration 15m, cats @home
+        ];
+
+        let summary = compute_summary(&timed_life_chunks);
+
+        // Assertions need to account for get_life_chunk's behavior if categories like @projA are misinterpreted
+        // Based on current knowledge of get_life_chunk, quadrant tags like @Q1 can be misparsed as categories.
+        // Assuming @work, @projA, @home are not quadrant-like.
+        let mut expected_summary = HashMap::new();
+        expected_summary.insert("@work".to_string(), Duration::minutes(30 + 60));
+        expected_summary.insert("@projA".to_string(), Duration::minutes(30));
+        expected_summary.insert("@home".to_string(), Duration::minutes(15));
+
+        assert_eq!(summary.len(), expected_summary.len());
+        assert_eq!(summary.get("@work"), expected_summary.get("@work"));
+        assert_eq!(summary.get("@projA"), expected_summary.get("@projA"));
+        assert_eq!(summary.get("@home"), expected_summary.get("@home"));
+    }
+
+    #[test]
+    fn test_compute_summary_empty_input() {
+        let timed_life_chunks: Vec<TimedLifeChunk> = vec![];
+        let summary = compute_summary(&timed_life_chunks);
+        assert!(summary.is_empty(), "Summary should be empty for empty input");
+    }
+
+    #[test]
+    fn test_compute_summary_no_categories_in_chunks() {
+        let timed_life_chunks = vec![
+            create_timed_chunk_from_line("0 30 Task 1 no cat"),            // No categories
+            create_timed_chunk_from_line("1 0 Task 2 with cat @work"),   // @work
+            create_timed_chunk_from_line("0 15 Task 3 no cat again"),       // No categories
+        ];
+
+        let summary = compute_summary(&timed_life_chunks);
+
+        let mut expected_summary = HashMap::new();
+        expected_summary.insert("@work".to_string(), Duration::minutes(60));
+
+        assert_eq!(summary.len(), expected_summary.len());
+        assert_eq!(summary.get("@work"), expected_summary.get("@work"));
+        assert_eq!(summary.get(""), None, "Empty category string should not be added by get_life_chunk or summary");
+    }
+
+    #[test]
+    fn test_compute_summary_multiple_categories_in_single_chunk() {
+        let timed_life_chunks = vec![
+            create_timed_chunk_from_line("0 45 Session 1 @planning @meeting @clientA"),
+            create_timed_chunk_from_line("0 30 Session 2 @meeting @internal"),
+        ];
+
+        let summary = compute_summary(&timed_life_chunks);
+
+        let mut expected_summary = HashMap::new();
+        expected_summary.insert("@planning".to_string(), Duration::minutes(45));
+        expected_summary.insert("@meeting".to_string(), Duration::minutes(45 + 30));
+        expected_summary.insert("@clientA".to_string(), Duration::minutes(45));
+        expected_summary.insert("@internal".to_string(), Duration::minutes(30));
+
+        assert_eq!(summary.len(), expected_summary.len());
+        assert_eq!(summary.get("@planning"), expected_summary.get("@planning"));
+        assert_eq!(summary.get("@meeting"), expected_summary.get("@meeting"));
+        assert_eq!(summary.get("@clientA"), expected_summary.get("@clientA"));
+        assert_eq!(summary.get("@internal"), expected_summary.get("@internal"));
+    }
+
+    #[test]
+    fn test_compute_summary_zero_duration_chunks() {
+        let timed_life_chunks = vec![
+            create_timed_chunk_from_line("0 0 Task 1 zero duration @work @projA"),
+            create_timed_chunk_from_line("1 0 Task 2 normal duration @work"),
+            create_timed_chunk_from_line("0 0 Task 3 zero duration @home"),
+        ];
+
+        let summary = compute_summary(&timed_life_chunks);
+
+        let mut expected_summary = HashMap::new();
+        expected_summary.insert("@work".to_string(), Duration::minutes(0 + 60));
+        expected_summary.insert("@projA".to_string(), Duration::minutes(0));
+        expected_summary.insert("@home".to_string(), Duration::minutes(0));
+
+        assert_eq!(summary.len(), expected_summary.len());
+        assert_eq!(summary.get("@work"), expected_summary.get("@work"));
+        assert_eq!(summary.get("@projA"), expected_summary.get("@projA"));
+        assert_eq!(summary.get("@home"), expected_summary.get("@home"));
+    }
+
+    // Tests for compute_context_summary
+    #[test]
+    fn test_compute_context_summary_empty() {
+        let contexts: HashMap<String, Duration> = HashMap::new();
+        let result = compute_context_summary(&contexts);
+        assert!(result.is_empty(), "Expected empty vector for empty input HashMap");
+    }
+
+    #[test]
+    fn test_compute_context_summary_basic_sorted() {
+        let mut contexts: HashMap<String, Duration> = HashMap::new();
+        contexts.insert("@work".to_string(), Duration::hours(2));
+        contexts.insert("@home".to_string(), Duration::hours(1));
+        contexts.insert("@study".to_string(), Duration::minutes(30));
+
+        let result = compute_context_summary(&contexts);
+
+        assert_eq!(result.len(), 3);
+        // Check order and content (sorted alphabetically by name)
+        assert_eq!(result[0].name, "@home");
+        assert_eq!(result[0].duration, Duration::hours(1));
+
+        assert_eq!(result[1].name, "@study");
+        assert_eq!(result[1].duration, Duration::minutes(30));
+
+        assert_eq!(result[2].name, "@work");
+        assert_eq!(result[2].duration, Duration::hours(2));
+    }
+
+    // Tests for format_category_summary and format_category_summary_with_note
+    fn get_test_date() -> Date<Local> {
+        Local.ymd(2024, 3, 15) // Directly returns Date<Local>
+    }
+
+    #[test]
+    fn test_format_category_summary_empty() {
+        let ctg_summary_vec: Vec<CategorySummary> = Vec::new();
+        let test_date = get_test_date();
+        // Date<Local>.to_string() produces "YYYY-MM-DD" which is then bolded.
+        let formatted_date_str = test_date.to_string().bold().to_string();
+
+        let result = format_category_summary(ctg_summary_vec, test_date);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], format!("{} (summary)", formatted_date_str));
+        assert_eq!(result[1], "");
+    }
+
+    #[test]
+    fn test_format_category_summary_with_note_empty() {
+        let ctg_summary_vec: Vec<CategorySummary> = Vec::new();
+        let test_date = get_test_date();
+        let note = "(custom test note)";
+        let formatted_date_str = test_date.to_string().bold().to_string();
+
+        let result = format_category_summary_with_note(ctg_summary_vec, test_date, note);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], format!("{} {}", formatted_date_str, note));
+        assert_eq!(result[1], "");
+    }
+
+    #[test]
+    fn test_format_category_summary_basic() {
+        let test_date = get_test_date();
+        let date_str_bold = test_date.to_string().bold().to_string();
+        let ctg_summary_vec = vec![
+            CategorySummary { name: "@food", duration: Duration::minutes(45) },
+            CategorySummary { name: "@sleep", duration: Duration::hours(8) },
+        ];
+        // compute_context_summary sorts its output. If this Vec is manually created and not sorted,
+        // and if format_category_summary relies on a specific order without re-sorting, tests could be flaky.
+        // However, format_category_summary iterates the input Vec as-is.
+        // For this test, providing in alphabetical order as compute_context_summary would.
+
+        let result = format_category_summary(ctg_summary_vec, test_date);
+
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], format!("{} (summary)", date_str_bold));
+        assert_eq!(result[1], "@food: 00h45");
+        assert_eq!(result[2], "@sleep: 08h00");
+        assert_eq!(result[3], "");
+    }
+
+    #[test]
+    fn test_format_category_summary_with_note_basic() {
+        let test_date = get_test_date();
+        let date_str_bold = test_date.to_string().bold().to_string();
+        let note = "(daily workout)";
+        let ctg_summary_vec = vec![
+            CategorySummary { name: "@exercise", duration: Duration::hours(1) + Duration::minutes(15) },
+        ];
+
+        let result = format_category_summary_with_note(ctg_summary_vec, test_date, note);
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], format!("{} {}", date_str_bold, note));
+        assert_eq!(result[1], "@exercise: 01h15");
+        assert_eq!(result[2], "");
     }
 }
 
