@@ -62,9 +62,15 @@ struct RawConfig {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap};
     use std::env;
+    use std::fs::{self, File};
+    use std::io::Write;
     use std::path::PathBuf;
+
+    use crate::config::{load_config, update_parse_state_from_config, Config, Quadrant};
+    use crate::parse_state::ParseState;
+    use crate::TiroError; // For asserting error types
 
     use serde_derive::Deserialize;
     use serde_derive::Serialize;
@@ -104,14 +110,14 @@ mod tests {
     }
 
     #[derive(Serialize, Deserialize)]
-    struct Config {
+    struct TestLocalConfig { // Renamed from Config to avoid conflict
         activity_paths: Vec<PathBuf>,
         quadrants: HashMap<String, Vec<String>>,
     }
 
     #[test]
     fn test_2() {
-        let config: Config = toml::from_str(
+        let config: TestLocalConfig = toml::from_str( // Use TestLocalConfig
             r#"activity_paths = ["$MOBILE_DIR/0_planning/activities.txt", "other_path"]
                 [quadrants]
                 # urgent and important
@@ -127,6 +133,201 @@ mod tests {
         .unwrap();
         println!("{:?}", config.activity_paths);
         println!("{:?}", config.quadrants);
+    }
+
+    // Helper function to create a temporary directory for test files
+    fn setup_test_dir(suffix: &str) -> PathBuf {
+        let base_dir = PathBuf::from("./target/test_temp_configs");
+        // fs::create_dir_all(&base_dir).expect("Failed to create base test_temp_configs dir"); // Ensure base exists
+        let test_specific_dir = base_dir.join(suffix);
+        fs::create_dir_all(&test_specific_dir)
+            .expect(&format!("Failed to create test specific temp dir: {:?}", test_specific_dir));
+        test_specific_dir
+    }
+
+    // Helper function to clean up the temporary directory
+    fn cleanup_test_dir(test_dir: &PathBuf) {
+        if test_dir.exists() {
+            fs::remove_dir_all(test_dir).expect("Failed to remove test temp dir");
+        }
+    }
+
+    #[test]
+    fn test_load_config_valid_file() {
+        let test_dir = setup_test_dir("valid_file");
+        let activity_file_path_relative = test_dir.join("activities.txt");
+        let config_file_path = test_dir.join("valid_config.toml");
+
+        // Create dummy activity file
+        File::create(&activity_file_path_relative)
+            .expect("Failed to create dummy activity file")
+            .write_all(b"dummy content")
+            .expect("Failed to write to dummy activity file");
+
+        // Get the absolute path to write into the config file
+        let activity_file_path_abs = fs::canonicalize(&activity_file_path_relative)
+            .expect("Failed to canonicalize activity_file_path for config content");
+
+        // Create valid config content
+        let config_content = format!(
+            r#"
+            activity_paths = ["{}"]
+
+            [quadrants]
+            Q1 = ["@work"]
+            Q2 = ["@home", "@relax"]
+            "#,
+            activity_file_path_abs.to_str().unwrap() // Ensure absolute path string in TOML
+        );
+        fs::write(&config_file_path, config_content).expect("Failed to write valid config file");
+
+        let result = load_config(config_file_path.to_str().unwrap());
+        assert!(result.is_ok(), "load_config failed for a valid file: {:?}", result.err());
+
+        let config = result.unwrap();
+
+        // Assert quadrants
+        assert_eq!(config.quadrants.len(), 2);
+        assert_eq!(config.quadrants.get(&Quadrant::Q1), Some(&vec!["@work".to_string()]));
+        assert_eq!(config.quadrants.get(&Quadrant::Q2), Some(&vec!["@home".to_string(), "@relax".to_string()]));
+
+        // Assert activity_paths
+        let expected_activity_path = activity_file_path_abs; // Already canonicalized
+        assert_eq!(config.activity_paths.len(), 1);
+        assert!(config.activity_paths.contains(&expected_activity_path));
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    #[test]
+    fn test_load_config_invalid_toml_syntax() {
+        let test_dir = setup_test_dir("invalid_syntax");
+        let config_file_path = test_dir.join("invalid_syntax.toml");
+
+        let invalid_config_content = r#"
+            activity_paths = ["/some/path"]
+            [quadrants]
+            Q1 = ["@test"]
+            THIS_IS_INVALID_TOML_SYNTAX
+        "#;
+        fs::write(&config_file_path, invalid_config_content).expect("Failed to write invalid config file");
+
+        let result = load_config(config_file_path.to_str().unwrap());
+        assert!(result.is_err(), "load_config did not return an error for invalid TOML syntax");
+
+        // Check if the error is a TOML parsing error
+        if let Err(TiroError { e }) = result {
+            // TOML errors usually contain specifics like "expected", "found", "line", "column"
+            // Example: "expected an equals, found a newline at line 5 column 40"
+            let is_toml_error = (e.contains("expected") && e.contains("line")) ||
+                                e.contains("TOML decode error") || // another common TOML error string
+                                e.contains("invalid table header"); // etc.
+            assert!(is_toml_error, "Error message does not indicate a TOML parsing error: {}", e);
+        } else {
+            panic!("Expected a TiroError containing a TOML parsing error");
+        }
+
+        cleanup_test_dir(&test_dir);
+    }
+
+    #[test]
+    fn test_load_config_non_existent_file() {
+        let test_dir = setup_test_dir("non_existent");
+        let non_existent_config_path = test_dir.join("non_existent_config.toml");
+
+        // Ensure file does not exist before test
+        if non_existent_config_path.exists() {
+            fs::remove_file(&non_existent_config_path).unwrap();
+        }
+
+        let result = load_config(non_existent_config_path.to_str().unwrap());
+        assert!(result.is_err(), "load_config did not return an error for a non-existent file");
+
+        // Check if the error is an IO error (file not found)
+        // The specific error message might vary by OS/platform for "No such file or directory"
+        // We expect it to be wrapped in TiroError.
+        if let Err(TiroError { e }) = result {
+             assert!(e.contains("No such file or directory") || e.contains("os error 2"), "Error message does not indicate file not found: {}", e);
+        } else {
+            panic!("Expected TiroError::from(std::io::Error)");
+        }
+        cleanup_test_dir(&test_dir);
+    }
+
+    #[test]
+    fn test_update_parse_state_basic() {
+        let mut config = Config::default();
+        config.quadrants.insert(Quadrant::Q1, vec!["@work".to_string(), "@urgent".to_string()]);
+        config.quadrants.insert(Quadrant::Q2, vec!["@home".to_string()]);
+
+        let mut parse_state = ParseState::new();
+
+        update_parse_state_from_config(&config, &mut parse_state).unwrap();
+
+        assert_eq!(parse_state.categories_to_quadrant.len(), 3);
+        assert_eq!(parse_state.categories_to_quadrant.get("@work"), Some(&Quadrant::Q1));
+        assert_eq!(parse_state.categories_to_quadrant.get("@urgent"), Some(&Quadrant::Q1));
+        assert_eq!(parse_state.categories_to_quadrant.get("@home"), Some(&Quadrant::Q2));
+    }
+
+    #[test]
+    fn test_update_parse_state_no_override() {
+        let mut config = Config::default();
+        config.quadrants.insert(Quadrant::Q1, vec!["@work".to_string()]); // Config tries to set @work to Q1
+
+        let mut parse_state = ParseState::new();
+        parse_state.categories_to_quadrant.insert("@work".to_string(), Quadrant::Q2); // ParseState already has @work as Q2
+        parse_state.categories_to_quadrant.insert("@study".to_string(), Quadrant::Q3);
+
+        update_parse_state_from_config(&config, &mut parse_state).unwrap();
+
+        assert_eq!(parse_state.categories_to_quadrant.len(), 2);
+        assert_eq!(parse_state.categories_to_quadrant.get("@work"), Some(&Quadrant::Q2), "Existing mapping for @work should not be overridden");
+        assert_eq!(parse_state.categories_to_quadrant.get("@study"), Some(&Quadrant::Q3));
+    }
+
+    #[test]
+    fn test_update_parse_state_category_not_in_config() {
+        let mut config = Config::default();
+        config.quadrants.insert(Quadrant::Q1, vec!["@work".to_string()]);
+
+        let mut parse_state = ParseState::new();
+        parse_state.categories_to_quadrant.insert("@personal".to_string(), Quadrant::Q4); // This category is not in config
+
+        update_parse_state_from_config(&config, &mut parse_state).unwrap();
+
+        assert_eq!(parse_state.categories_to_quadrant.len(), 2);
+        assert_eq!(parse_state.categories_to_quadrant.get("@work"), Some(&Quadrant::Q1), "@work from config should be added");
+        assert_eq!(parse_state.categories_to_quadrant.get("@personal"), Some(&Quadrant::Q4), "@personal should remain unchanged");
+    }
+
+    #[test]
+    fn test_update_parse_state_empty_parse_state() {
+        let mut config = Config::default();
+        config.quadrants.insert(Quadrant::Q1, vec!["@test".to_string()]);
+
+        let mut parse_state = ParseState::new(); // Empty ParseState
+
+        update_parse_state_from_config(&config, &mut parse_state).unwrap();
+
+        assert_eq!(parse_state.categories_to_quadrant.len(), 1);
+        assert_eq!(parse_state.categories_to_quadrant.get("@test"), Some(&Quadrant::Q1));
+    }
+
+    #[test]
+    fn test_update_parse_state_empty_config_quadrants() {
+        let config = Config::default(); // Empty Config.quadrants
+
+        let mut parse_state = ParseState::new();
+        parse_state.categories_to_quadrant.insert("@existing".to_string(), Quadrant::Q1);
+
+        let initial_parse_state_clone = parse_state.categories_to_quadrant.clone();
+
+        update_parse_state_from_config(&config, &mut parse_state).unwrap();
+
+        assert_eq!(parse_state.categories_to_quadrant, initial_parse_state_clone, "ParseState should remain unchanged with empty config quadrants");
+        assert_eq!(parse_state.categories_to_quadrant.len(), 1);
+        assert_eq!(parse_state.categories_to_quadrant.get("@existing"), Some(&Quadrant::Q1));
     }
 }
 
