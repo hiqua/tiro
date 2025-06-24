@@ -28,7 +28,7 @@ mod tests {
     use time::Duration;
 
     use crate::config::Quadrant;
-    use crate::parse::{get_life_chunk, parse_date, process_line, LineParseResult, LifeChunk};
+    use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult};
 
     #[test]
     fn parsing_1() {
@@ -412,7 +412,8 @@ fn parse_date(s: &str) -> Option<Timestamp> {
     results.iter().find_map(|r| r.ok())
 }
 
-pub(crate) fn get_life_chunk(line: &str) -> LifeChunk { // Made pub(crate)
+pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
+    // Made pub(crate)
     let mut tokens = line.split(|c: char| c == ',' || c.is_whitespace());
 
     let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
