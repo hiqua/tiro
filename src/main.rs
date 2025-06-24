@@ -32,8 +32,9 @@ mod pretty_print;
 mod summary;
 
 type Writer = (Box<dyn Write>, bool);
+type TiroResult<T> = anyhow::Result<T>;
 
-fn main_loop(config: &Config) -> anyhow::Result<(Sender<()>, Option<JoinHandle<()>>)> {
+fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)> {
     // START PARSE
     let file_paths = config.get_file_paths();
     let all_activities_line = get_all_lines(Box::new(file_paths.into_iter()))?;

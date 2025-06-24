@@ -13,7 +13,7 @@ use crate::summary::{
     compute_context_summary, format_category_summary, format_category_summary_with_note,
     merge_all_summaries, Summary, Timestamp,
 };
-use crate::Writer;
+use crate::{TiroResult, Writer};
 
 pub struct Writers {
     pub plan_writers: Vec<Writer>,
@@ -24,7 +24,7 @@ pub struct Writers {
 pub fn write_plan(
     all_life_lapses: &[LifeLapse],
     mut plan_writers: Vec<(Box<dyn Write>, bool)>,
-) -> anyhow::Result<()> {
+) -> TiroResult<()> {
     for (ref mut plan_writer, plan_color) in &mut plan_writers {
         write_to(
             || format_lifelapses(all_life_lapses),
@@ -38,7 +38,7 @@ pub fn write_plan(
 pub fn write_summary(
     all_summaries: &[(Timestamp, Summary)],
     mut summary_writers: Vec<(Box<dyn Write>, bool)>,
-) -> anyhow::Result<()> {
+) -> TiroResult<()> {
     for (ts, summary) in all_summaries {
         for (ref mut summary_writer, summary_color) in &mut summary_writers {
             write_to(
@@ -54,7 +54,7 @@ pub fn write_summary(
 pub fn write_global_summary(
     all_summaries: &[(Timestamp, Summary)],
     mut summary_writers: Vec<(Box<dyn Write>, bool)>,
-) -> anyhow::Result<()> {
+) -> TiroResult<()> {
     let only_summaries: Vec<Summary> = all_summaries.iter().map(|(_, s)| s.clone()).collect();
     let summary: Summary = merge_all_summaries(&only_summaries);
     for (ref mut summary_writer, summary_color) in &mut summary_writers {
@@ -138,7 +138,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> Writers {
 
 pub fn get_all_lines(
     file_paths: Box<dyn Iterator<Item = PathBuf>>,
-) -> anyhow::Result<Vec<Vec<String>>> {
+) -> TiroResult<Vec<Vec<String>>> {
     let mut all_activities_line = vec![];
 
     {

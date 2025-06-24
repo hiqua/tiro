@@ -13,6 +13,7 @@ use serde_derive::Serialize;
 use toml::de::Error;
 
 use crate::parse_state::ParseState;
+use anyhow::Result as TiroResult;
 
 pub type Category = str;
 
@@ -57,6 +58,7 @@ mod tests {
 
     use crate::config::{load_config, update_parse_state_from_config, Config, Quadrant};
     use crate::parse_state::ParseState;
+    use anyhow::Error as TiroError; // For asserting error types
 
     use serde_derive::Deserialize;
     use serde_derive::Serialize;
@@ -220,17 +222,17 @@ mod tests {
         );
 
         // Check if the error is a TOML parsing error
-        if let Err(err) = result {
-            let err_msg = err.to_string();
+        if let Err(e) = result {
+            let error_string = e.to_string();
             // TOML errors usually contain specifics like "expected", "found", "line", "column"
             // Example: "expected an equals, found a newline at line 5 column 40"
-            let is_toml_error = (err_msg.contains("expected") && err_msg.contains("line")) ||
-                                err_msg.contains("TOML decode error") || // another common TOML error string
-                                err_msg.contains("invalid table header"); // etc.
+            let is_toml_error = (error_string.contains("expected") && error_string.contains("line")) ||
+                                error_string.contains("TOML decode error") || // another common TOML error string
+                                error_string.contains("invalid table header"); // etc.
             assert!(
                 is_toml_error,
                 "Error message does not indicate a TOML parsing error: {}",
-                err_msg
+                error_string
             );
         } else {
             panic!("Expected an anyhow::Error containing a TOML parsing error");
@@ -257,15 +259,15 @@ mod tests {
 
         // Check if the error is an IO error (file not found)
         // The specific error message might vary by OS/platform for "No such file or directory"
-        if let Err(err) = result {
-            let err_msg = err.to_string();
+        if let Err(e) = result {
+            let error_string = e.to_string();
             assert!(
-                err_msg.contains("No such file or directory") || err_msg.contains("os error 2"),
+                error_string.contains("No such file or directory") || error_string.contains("os error 2"),
                 "Error message does not indicate file not found: {}",
-                err_msg
+                error_string
             );
         } else {
-            panic!("Expected anyhow::Error::from(std::io::Error)");
+            panic!("Expected anyhow::Error from std::io::Error");
         }
         cleanup_test_dir(&test_dir);
     }
@@ -461,7 +463,7 @@ impl fmt::Display for Quadrant {
     }
 }
 
-fn convert_raw_config(raw_config: RawConfig) -> anyhow::Result<Config> {
+fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
     let mut map = HashMap::new();
 
     for (k, v) in raw_config.quadrants.iter() {
@@ -527,7 +529,7 @@ fn get_activity_file_path_from_matches(matches: &ArgMatches) -> Vec<PathBuf> {
     res
 }
 
-fn load_config(path: &str) -> anyhow::Result<Config> {
+fn load_config(path: &str) -> TiroResult<Config> {
     let config_str = fs::read_to_string(path)?;
     let raw_config: RawConfig = toml::from_str(&config_str)?;
 
@@ -540,7 +542,7 @@ fn load_config(path: &str) -> anyhow::Result<Config> {
 pub fn update_parse_state_from_config(
     config: &Config,
     parse_state: &mut ParseState,
-) -> anyhow::Result<()> {
+) -> TiroResult<()> {
     for (q, v) in config.quadrants.iter() {
         for s in v {
             if !parse_state.categories_to_quadrant.contains_key(s) {
