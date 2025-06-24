@@ -13,21 +13,9 @@ use serde_derive::Serialize;
 use toml::de::Error;
 
 use crate::parse_state::ParseState;
-use crate::{TiroError, TiroResult};
+use anyhow::Result;
 
 pub type Category = str;
-
-impl From<std::io::Error> for TiroError {
-    fn from(e: std::io::Error) -> Self {
-        TiroError { e: e.to_string() }
-    }
-}
-
-impl From<Error> for TiroError {
-    fn from(e: Error) -> Self {
-        TiroError { e: e.to_string() }
-    }
-}
 
 /// The global config.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -70,7 +58,7 @@ mod tests {
 
     use crate::config::{load_config, update_parse_state_from_config, Config, Quadrant};
     use crate::parse_state::ParseState;
-    use crate::TiroError; // For asserting error types
+    use anyhow::Error; // For asserting error types - now anyhow::Error
 
     use serde_derive::Deserialize;
     use serde_derive::Serialize;
@@ -234,19 +222,14 @@ mod tests {
         );
 
         // Check if the error is a TOML parsing error
-        if let Err(TiroError { e }) = result {
-            // TOML errors usually contain specifics like "expected", "found", "line", "column"
-            // Example: "expected an equals, found a newline at line 5 column 40"
-            let is_toml_error = (e.contains("expected") && e.contains("line")) ||
-                                e.contains("TOML decode error") || // another common TOML error string
-                                e.contains("invalid table header"); // etc.
+        if let Err(err) = result {
             assert!(
-                is_toml_error,
+                err.downcast_ref::<toml::de::Error>().is_some() || err.to_string().contains("TOML"),
                 "Error message does not indicate a TOML parsing error: {}",
-                e
+                err
             );
         } else {
-            panic!("Expected a TiroError containing a TOML parsing error");
+            panic!("Expected an error containing a TOML parsing error");
         }
 
         cleanup_test_dir(&test_dir);
@@ -269,16 +252,15 @@ mod tests {
         );
 
         // Check if the error is an IO error (file not found)
-        // The specific error message might vary by OS/platform for "No such file or directory"
-        // We expect it to be wrapped in TiroError.
-        if let Err(TiroError { e }) = result {
+        if let Err(err) = result {
             assert!(
-                e.contains("No such file or directory") || e.contains("os error 2"),
+                err.downcast_ref::<std::io::Error>().is_some()
+                    || err.to_string().contains("No such file"),
                 "Error message does not indicate file not found: {}",
-                e
+                err
             );
         } else {
-            panic!("Expected TiroError::from(std::io::Error)");
+            panic!("Expected an error indicating file not found");
         }
         cleanup_test_dir(&test_dir);
     }
@@ -415,7 +397,7 @@ mod tests {
 pub enum MetaCategory<'a> {
     RegularCategory {
         description: &'a str,
-        global_quad: Option<Quadrant>,
+        // global_quad: Option<Quadrant>, // Unused
     },
     Quad {
         quadrant: Quadrant,
@@ -434,9 +416,9 @@ pub enum Quadrant {
 }
 
 impl FromStr for Quadrant {
-    type Err = TiroError;
+    type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> anyhow::Result<Self> {
         match s {
             "@1" => Ok(Quadrant::Q1),
             "@2" => Ok(Quadrant::Q2),
@@ -456,9 +438,7 @@ impl FromStr for Quadrant {
             "Q4" => Ok(Quadrant::Q4),
             "Q5" => Ok(Quadrant::Q5),
             "Q6" => Ok(Quadrant::Q6),
-            _ => Err(TiroError {
-                e: "could not parse quadrant".to_string(),
-            }),
+            _ => Err(anyhow::anyhow!("could not parse quadrant: {}", s)),
         }
     }
 }
@@ -476,7 +456,7 @@ impl fmt::Display for Quadrant {
     }
 }
 
-fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
+fn convert_raw_config(raw_config: RawConfig) -> Result<Config> {
     let mut map = HashMap::new();
 
     for (k, v) in raw_config.quadrants.iter() {
@@ -542,7 +522,7 @@ fn get_activity_file_path_from_matches(matches: &ArgMatches) -> Vec<PathBuf> {
     res
 }
 
-fn load_config(path: &str) -> TiroResult<Config> {
+fn load_config(path: &str) -> Result<Config> {
     let config_str = fs::read_to_string(path)?;
     let raw_config: RawConfig = toml::from_str(&config_str)?;
 
@@ -552,10 +532,7 @@ fn load_config(path: &str) -> TiroResult<Config> {
 /// XXX
 /// * don't use side-effects
 /// * handle errors properly
-pub fn update_parse_state_from_config(
-    config: &Config,
-    parse_state: &mut ParseState,
-) -> TiroResult<()> {
+pub fn update_parse_state_from_config(config: &Config, parse_state: &mut ParseState) -> Result<()> {
     for (q, v) in config.quadrants.iter() {
         for s in v {
             if !parse_state.categories_to_quadrant.contains_key(s) {

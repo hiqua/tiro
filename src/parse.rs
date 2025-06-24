@@ -20,7 +20,7 @@ use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
 use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
-use crate::{TiroError, TiroResult};
+use anyhow::Result;
 
 #[cfg(test)]
 mod tests {
@@ -177,12 +177,6 @@ mod tests {
             }
             _ => panic!("Expected LineParseResult::Lc for an empty line"),
         }
-    }
-}
-
-impl From<ParseIntError> for TiroError {
-    fn from(e: ParseIntError) -> Self {
-        TiroError { e: e.to_string() }
     }
 }
 
@@ -344,7 +338,7 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
     result
 }
 
-pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
+pub fn read_lines_from_file(path: PathBuf) -> Result<Vec<String>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
@@ -355,30 +349,21 @@ pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
     }
 
     if lines.is_empty() {
-        return Err(TiroError {
-            e: "No lines found in file.".to_string(),
-        });
+        return Err(anyhow::anyhow!("No lines found in file."));
     }
 
     Ok(lines)
 }
 
-pub fn read_stdin_lines() -> TiroResult<Vec<String>> {
+pub fn read_stdin_lines() -> Result<Vec<String>> {
     let stdin = std::io::stdin();
-    let r: Result<Vec<_>, _> = stdin.lock().lines().collect();
+    let lines: Result<Vec<_>, _> = stdin.lock().lines().collect();
+    let lines = lines?;
 
-    if let Ok(res) = r {
-        if res.is_empty() {
-            return Err(TiroError {
-                e: "No lines found in file.".to_string(),
-            });
-        }
-        Ok(res)
-    } else {
-        Err(TiroError {
-            e: "Error while reading lines.".to_string(),
-        })
+    if lines.is_empty() {
+        return Err(anyhow::anyhow!("No lines found in stdin."));
     }
+    Ok(lines)
 }
 
 fn parse_category(token: &str) -> Option<MetaCategory> {
@@ -389,7 +374,7 @@ fn parse_category(token: &str) -> Option<MetaCategory> {
         } else {
             Some(RegularCategory {
                 description: token,
-                global_quad: None,
+                // global_quad: None, // Field removed
             })
         }
     } else {
