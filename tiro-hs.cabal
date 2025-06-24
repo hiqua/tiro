@@ -1,0 +1,66 @@
+cabal-version:       2.4
+name:                tiro-hs
+version:             0.1.0.0
+synopsis:            A command-line planning tool, Haskell version of Tiro.
+description:         Parses activity logs, generates plans and summaries.
+homepage:            https://github.com/yourusername/tiro-hs
+license:             GPL-3.0-or-later
+license-file:        LICENSE
+author:              Jules (AI Assistant)
+maintainer:          user@example.com
+category:            Productivity, TextProcessing
+build-type:          Simple
+extra-source-files:  README.md
+
+executable tiro-hs
+    main-is:             Main.hs
+    hs-source-dirs:      src
+    build-depends:
+        base >=4.12 && <5,
+        text >=1.2 && <2.1,
+        time >=1.8 && <1.13,
+        containers >=0.6 && <0.7,
+        optparse-applicative >=0.14 && <0.19,
+        -- For TOML parsing. Using toml-parser as it's often available.
+        -- htoml-megaparsec is another good option.
+        toml-parser >= 1.3.2 && < 1.4,
+        directory >=1.3 && <1.4,
+        filepath >=1.4 && <1.5,
+        -- Add Printf for formatting (used in Summary.hs and PrettyPrint.hs)
+        -- It's part of base, but explicitly listing for clarity of thought process
+        -- Actually, Printf is from `text-format` or available in `base` via Text.Printf.
+        -- Let's rely on base's Text.Printf or use a specific library if advanced features are needed.
+        -- For now, assuming Text.Printf from base is sufficient.
+        -- If `Text.Printf` is used, it's part of `base`.
+        -- If `MissingH` or `text-format`'s Printf is meant, it would be a separate dep.
+        -- The code currently uses `Text.Printf.printf`.
+        -- `MissingH` provides `Text.Printf`, but `base` also has `Text.Printf`.
+        -- Let's assume `base`'s is used.
+
+    default-language:    Haskell2010
+    ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+    other-modules:
+        Types,
+        Config,
+        Parse,
+        Summary,
+        PrettyPrint
+
+    -- If we add a Util module:
+    -- other-modules:
+    --     Util
+
+    -- If we add tests later:
+-- test-suite tiro-hs-test
+--     type:                exitcode-stdio-1.0
+--     main-is:             Spec.hs
+--     hs-source-dirs:      test
+--     build-depends:
+--         base,
+--         tiro-hs,
+--         -- Add testing frameworks like Hspec or tasty
+--         hspec >=2.7 && <2.11
+--     ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+--     default-language:    Haskell2010
+```
