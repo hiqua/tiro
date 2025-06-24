@@ -223,7 +223,11 @@ mod tests {
 
         // Check if the error is a TOML parsing error
         if let Err(err) = result {
-            assert!(err.downcast_ref::<toml::de::Error>().is_some() || err.to_string().contains("TOML"), "Error message does not indicate a TOML parsing error: {}", err);
+            assert!(
+                err.downcast_ref::<toml::de::Error>().is_some() || err.to_string().contains("TOML"),
+                "Error message does not indicate a TOML parsing error: {}",
+                err
+            );
         } else {
             panic!("Expected an error containing a TOML parsing error");
         }
@@ -249,7 +253,12 @@ mod tests {
 
         // Check if the error is an IO error (file not found)
         if let Err(err) = result {
-            assert!(err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("No such file"), "Error message does not indicate file not found: {}", err);
+            assert!(
+                err.downcast_ref::<std::io::Error>().is_some()
+                    || err.to_string().contains("No such file"),
+                "Error message does not indicate file not found: {}",
+                err
+            );
         } else {
             panic!("Expected an error indicating file not found");
         }
@@ -523,10 +532,7 @@ fn load_config(path: &str) -> Result<Config> {
 /// XXX
 /// * don't use side-effects
 /// * handle errors properly
-pub fn update_parse_state_from_config(
-    config: &Config,
-    parse_state: &mut ParseState,
-) -> Result<()> {
+pub fn update_parse_state_from_config(config: &Config, parse_state: &mut ParseState) -> Result<()> {
     for (q, v) in config.quadrants.iter() {
         for s in v {
             if !parse_state.categories_to_quadrant.contains_key(s) {

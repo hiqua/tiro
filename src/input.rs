@@ -137,9 +137,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> Writers {
     }
 }
 
-pub fn get_all_lines(
-    file_paths: Box<dyn Iterator<Item = PathBuf>>,
-) -> Result<Vec<Vec<String>>> {
+pub fn get_all_lines(file_paths: Box<dyn Iterator<Item = PathBuf>>) -> Result<Vec<Vec<String>>> {
     let mut all_activities_line = vec![];
 
     {
