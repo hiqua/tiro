@@ -13,21 +13,9 @@ use serde_derive::Serialize;
 use toml::de::Error;
 
 use crate::parse_state::ParseState;
-use crate::{TiroError, TiroResult};
+use anyhow::Result as TiroResult;
 
 pub type Category = str;
-
-impl From<std::io::Error> for TiroError {
-    fn from(e: std::io::Error) -> Self {
-        TiroError { e: e.to_string() }
-    }
-}
-
-impl From<Error> for TiroError {
-    fn from(e: Error) -> Self {
-        TiroError { e: e.to_string() }
-    }
-}
 
 /// The global config.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -70,7 +58,7 @@ mod tests {
 
     use crate::config::{load_config, update_parse_state_from_config, Config, Quadrant};
     use crate::parse_state::ParseState;
-    use crate::TiroError; // For asserting error types
+    use anyhow::Error as TiroError; // For asserting error types - now anyhow::Error
 
     use serde_derive::Deserialize;
     use serde_derive::Serialize;
@@ -234,19 +222,10 @@ mod tests {
         );
 
         // Check if the error is a TOML parsing error
-        if let Err(TiroError { e }) = result {
-            // TOML errors usually contain specifics like "expected", "found", "line", "column"
-            // Example: "expected an equals, found a newline at line 5 column 40"
-            let is_toml_error = (e.contains("expected") && e.contains("line")) ||
-                                e.contains("TOML decode error") || // another common TOML error string
-                                e.contains("invalid table header"); // etc.
-            assert!(
-                is_toml_error,
-                "Error message does not indicate a TOML parsing error: {}",
-                e
-            );
+        if let Err(err) = result {
+            assert!(err.downcast_ref::<toml::de::Error>().is_some() || err.to_string().contains("TOML"), "Error message does not indicate a TOML parsing error: {}", err);
         } else {
-            panic!("Expected a TiroError containing a TOML parsing error");
+            panic!("Expected an error containing a TOML parsing error");
         }
 
         cleanup_test_dir(&test_dir);
@@ -269,16 +248,10 @@ mod tests {
         );
 
         // Check if the error is an IO error (file not found)
-        // The specific error message might vary by OS/platform for "No such file or directory"
-        // We expect it to be wrapped in TiroError.
-        if let Err(TiroError { e }) = result {
-            assert!(
-                e.contains("No such file or directory") || e.contains("os error 2"),
-                "Error message does not indicate file not found: {}",
-                e
-            );
+        if let Err(err) = result {
+            assert!(err.downcast_ref::<std::io::Error>().is_some() || err.to_string().contains("No such file"), "Error message does not indicate file not found: {}", err);
         } else {
-            panic!("Expected TiroError::from(std::io::Error)");
+            panic!("Expected an error indicating file not found");
         }
         cleanup_test_dir(&test_dir);
     }
@@ -415,7 +388,7 @@ mod tests {
 pub enum MetaCategory<'a> {
     RegularCategory {
         description: &'a str,
-        global_quad: Option<Quadrant>,
+        // global_quad: Option<Quadrant>, // Unused
     },
     Quad {
         quadrant: Quadrant,
@@ -434,7 +407,7 @@ pub enum Quadrant {
 }
 
 impl FromStr for Quadrant {
-    type Err = TiroError;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -456,9 +429,7 @@ impl FromStr for Quadrant {
             "Q4" => Ok(Quadrant::Q4),
             "Q5" => Ok(Quadrant::Q5),
             "Q6" => Ok(Quadrant::Q6),
-            _ => Err(TiroError {
-                e: "could not parse quadrant".to_string(),
-            }),
+            _ => Err(anyhow::anyhow!("could not parse quadrant: {}", s)),
         }
     }
 }
