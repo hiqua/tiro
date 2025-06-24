@@ -20,7 +20,6 @@ use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
 use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
-use crate::TiroResult;
 
 #[cfg(test)]
 mod tests {
@@ -338,7 +337,7 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
     result
 }
 
-pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
+pub fn read_lines_from_file(path: PathBuf) -> anyhow::Result<Vec<String>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
@@ -355,7 +354,7 @@ pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
     Ok(lines)
 }
 
-pub fn read_stdin_lines() -> TiroResult<Vec<String>> {
+pub fn read_stdin_lines() -> anyhow::Result<Vec<String>> {
     let stdin = std::io::stdin();
     let r: Result<Vec<_>, _> = stdin.lock().lines().collect();
 

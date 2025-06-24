@@ -13,7 +13,6 @@ use serde_derive::Serialize;
 use toml::de::Error;
 
 use crate::parse_state::ParseState;
-use crate::TiroResult;
 
 pub type Category = str;
 
@@ -462,7 +461,7 @@ impl fmt::Display for Quadrant {
     }
 }
 
-fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
+fn convert_raw_config(raw_config: RawConfig) -> anyhow::Result<Config> {
     let mut map = HashMap::new();
 
     for (k, v) in raw_config.quadrants.iter() {
@@ -528,7 +527,7 @@ fn get_activity_file_path_from_matches(matches: &ArgMatches) -> Vec<PathBuf> {
     res
 }
 
-fn load_config(path: &str) -> TiroResult<Config> {
+fn load_config(path: &str) -> anyhow::Result<Config> {
     let config_str = fs::read_to_string(path)?;
     let raw_config: RawConfig = toml::from_str(&config_str)?;
 
@@ -541,7 +540,7 @@ fn load_config(path: &str) -> TiroResult<Config> {
 pub fn update_parse_state_from_config(
     config: &Config,
     parse_state: &mut ParseState,
-) -> TiroResult<()> {
+) -> anyhow::Result<()> {
     for (q, v) in config.quadrants.iter() {
         for s in v {
             if !parse_state.categories_to_quadrant.contains_key(s) {
