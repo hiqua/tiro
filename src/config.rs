@@ -415,7 +415,7 @@ mod tests {
 pub enum MetaCategory<'a> {
     RegularCategory {
         description: &'a str,
-        global_quad: Option<Quadrant>,
+        // global_quad: Option<Quadrant>, // Field removed due to dead_code warning
     },
     Quad {
         quadrant: Quadrant,
