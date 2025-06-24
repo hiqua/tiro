@@ -4,9 +4,9 @@ use std::thread;
 
 use std::time::Duration as StdDuration;
 
-use chrono::{Duration, Local};
-// use notify_rust::Notification;
-use time::OutOfRangeError;
+use chrono::{Duration, Local, OutOfRangeError as ChronoOutOfRangeError}; // Using chrono's OutOfRangeError
+                                                                         // use notify_rust::Notification;
+                                                                         // use time::OutOfRangeError; // No longer using time 0.1's OutOfRangeError here
 
 use crate::parse::{LifeChunk, TimedLifeChunk};
 
@@ -14,7 +14,6 @@ use notify_rust::Notification;
 use std::thread::JoinHandle;
 
 pub fn spawn_notification_thread(q: VecDeque<TimedLifeChunk>, rx: Receiver<()>) -> JoinHandle<()> {
-    // XXX: should join somehow
     let mut lc_ls = VecDeque::new();
     for tlc in q {
         lc_ls.push_back((tlc.start, tlc.life_chunk));
@@ -70,9 +69,10 @@ fn notify_nothing() -> bool {
     r.is_err()
 }
 
-fn unwrap_dur(r: Result<StdDuration, OutOfRangeError>) -> StdDuration {
+fn unwrap_dur(r: Result<StdDuration, ChronoOutOfRangeError>) -> StdDuration {
+    // Changed to ChronoOutOfRangeError
     match r {
         Ok(rr) => rr,
-        Err(_) => StdDuration::new(0, 0),
+        Err(_) => StdDuration::new(0, 0), // Logic remains: if conversion fails, use zero duration
     }
 }

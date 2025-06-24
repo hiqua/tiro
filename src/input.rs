@@ -13,7 +13,7 @@ use crate::summary::{
     compute_context_summary, format_category_summary, format_category_summary_with_note,
     merge_all_summaries, Summary, Timestamp,
 };
-use crate::{TiroResult, Writer};
+use crate::Writer; // TiroResult is removed
 
 pub struct Writers {
     pub plan_writers: Vec<Writer>,
@@ -24,8 +24,8 @@ pub struct Writers {
 pub fn write_plan(
     all_life_lapses: &[LifeLapse],
     mut plan_writers: Vec<(Box<dyn Write>, bool)>,
-) -> TiroResult<()> {
-    for (ref mut plan_writer, plan_color) in &mut plan_writers {
+) -> anyhow::Result<()> {
+    for (plan_writer, plan_color) in &mut plan_writers {
         write_to(
             || format_lifelapses(all_life_lapses),
             plan_writer.borrow_mut(),
@@ -38,11 +38,11 @@ pub fn write_plan(
 pub fn write_summary(
     all_summaries: &[(Timestamp, Summary)],
     mut summary_writers: Vec<(Box<dyn Write>, bool)>,
-) -> TiroResult<()> {
+) -> anyhow::Result<()> {
     for (ts, summary) in all_summaries {
-        for (ref mut summary_writer, summary_color) in &mut summary_writers {
+        for (summary_writer, summary_color) in &mut summary_writers {
             write_to(
-                || format_category_summary(compute_context_summary(summary), ts.date()),
+                || format_category_summary(compute_context_summary(summary), ts.date_naive()), // .date() -> .date_naive()
                 summary_writer.borrow_mut(),
                 *summary_color,
             )?;
@@ -54,11 +54,11 @@ pub fn write_summary(
 pub fn write_global_summary(
     all_summaries: &[(Timestamp, Summary)],
     mut summary_writers: Vec<(Box<dyn Write>, bool)>,
-) -> TiroResult<()> {
+) -> anyhow::Result<()> {
     let only_summaries: Vec<Summary> = all_summaries.iter().map(|(_, s)| s.clone()).collect();
     let summary: Summary = merge_all_summaries(&only_summaries);
-    for (ref mut summary_writer, summary_color) in &mut summary_writers {
-        let date = Local::now().date();
+    for (summary_writer, summary_color) in &mut summary_writers {
+        let date = Local::now().date_naive(); // .date() -> .date_naive()
         write_to(
             || {
                 format_category_summary_with_note(
@@ -138,7 +138,7 @@ pub fn get_writers(start_time: Timestamp, config: &Config) -> Writers {
 
 pub fn get_all_lines(
     file_paths: Box<dyn Iterator<Item = PathBuf>>,
-) -> TiroResult<Vec<Vec<String>>> {
+) -> anyhow::Result<Vec<Vec<String>>> {
     let mut all_activities_line = vec![];
 
     {

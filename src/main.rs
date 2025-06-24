@@ -1,20 +1,50 @@
-#![allow(unused_imports)]
-
-#[macro_use]
-extern crate clap;
+// #![allow(unused_imports)] // Removed
 
 use std::collections::VecDeque;
-use std::fmt;
 use std::io::Write;
-use std::sync::mpsc;
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
 use std::thread::JoinHandle;
-use std::time::Duration as StdDuration;
 
-use clap::App;
-use notify::{watcher, RecursiveMode, Watcher};
+use clap::Parser;
+use notify::{
+    Config as NotifyConfig, Error as NotifyError, Event, RecommendedWatcher, RecursiveMode, Watcher,
+}; // Updated notify imports
 
-use crate::config::{load_config_from_matches, Config};
+use crate::config::{load_config_from_cli_args, Config};
+
+/// Planning tool
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct CliArgs {
+    /// Sets the activity file to use, - is stdin
+    #[arg(short, long, value_name = "FILE")] // Removed multiple = true
+    activities: Vec<PathBuf>,
+
+    /// Sets the plan file to export to, defaults to stdout
+    #[arg(short, long, value_name = "FILE")]
+    plan: Option<PathBuf>,
+
+    /// Sets the summary file to export to, defaults to stdout
+    #[arg(short, long, value_name = "FILE")]
+    summary: Option<PathBuf>,
+
+    /// Watch the input file
+    #[arg(short, long)]
+    watch: bool,
+
+    /// Notify when the next activity is close
+    #[arg(short, long)]
+    notify: bool,
+
+    /// Quiet output
+    #[arg(short, long)]
+    quiet: bool,
+
+    /// Sets a custom config file
+    #[arg(short, long, value_name = "FILE")]
+    config: PathBuf, // Required, so not Option
+}
 use crate::input::{
     delay, get_all_lines, get_writers, write_global_summary, write_plan, write_summary, Writers,
 };
@@ -33,25 +63,12 @@ mod summary;
 
 type Writer = (Box<dyn Write>, bool);
 
-#[derive(Debug)]
-pub struct TiroError {
-    e: String,
-}
-
-type TiroResult<T> = Result<T, TiroError>;
-
-impl fmt::Display for TiroError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Oh no, something bad went down: {}", self.e)
-    }
-}
-
-fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)> {
+fn main_loop(config: &Config) -> anyhow::Result<(Sender<()>, Option<JoinHandle<()>>)> {
     // START PARSE
     let file_paths = config.get_file_paths();
     let all_activities_line = get_all_lines(Box::new(file_paths.into_iter()))?;
 
-    let (start_time, all_life_lapses) = get_all_life_lapses(all_activities_line, config);
+    let (start_time, all_life_lapses) = get_all_life_lapses(all_activities_line, config)?;
     // END PARSE
 
     // COMPUTE SUMMARIES
@@ -87,18 +104,28 @@ fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)
 }
 
 /// Should be allowed to fail, after some timeouts or number of attempts.
-fn watch_main_loop(config: &Config) -> TiroResult<()> {
-    let (tx, rx) = channel();
+fn watch_main_loop(config: &Config) -> anyhow::Result<()> {
+    let (tx, rx) = channel(); // This channel will receive () from the event handler
 
-    // XXX: infinite loop, causes problems, how to make it reasonable?
-
-    let mut watcher_var = loop {
-        // clone also use in watcher method anyway
-        if let Ok(r) = watcher(tx.clone(), StdDuration::from_secs(0)) {
-            break r;
-        }
-        delay();
-    };
+    // Create a new sender for the notify event handler to use,
+    // as the handler for RecommendedWatcher takes the sender by value.
+    let event_handler_tx = tx.clone();
+    let mut watcher_var: RecommendedWatcher = RecommendedWatcher::new(
+        move |res: Result<Event, NotifyError>| {
+            match res {
+                Ok(_event) => {
+                    // We don't need event details, just signal that something happened
+                    event_handler_tx.send(()).unwrap_or_else(|e| {
+                        eprintln!("[ERROR] Failed to send filesystem event signal: {:?}", e);
+                    });
+                }
+                Err(e) => {
+                    eprintln!("[ERROR] Watch error: {:?}", e);
+                }
+            }
+        },
+        NotifyConfig::default(),
+    )?; // RecommendedWatcher::new returns a Result
 
     let mut notification_tx;
     let mut handle;
@@ -129,22 +156,27 @@ fn watch_main_loop(config: &Config) -> TiroResult<()> {
                 }
                 // kill notification thread
                 if let Some(h) = handle {
-                    // should we care and do all this cleaning?
-                    if notification_tx.send(()).is_err() || h.join().is_err() {
-                        // XXX: ignoring errors, especially in case where notifications are disabled. Better way?
+                    if let Err(e) = notification_tx.send(()) {
+                        eprintln!(
+                            "[ERROR] Failed to send stop signal to notification thread: {:?}",
+                            e
+                        );
+                    }
+                    if let Err(e) = h.join() {
+                        eprintln!("[ERROR] Notification thread panicked: {:?}", e);
                     }
                 }
             }
-            Err(e) => println!("watch error: {:?}", e),
+            Err(e) => eprintln!("[ERROR] Filesystem watch error: {:?}", e), // Changed to eprintln
         }
     }
 }
 
-fn main() -> TiroResult<()> {
-    let yaml = load_yaml!("cli.yml");
-    let matches = App::from_yaml(yaml).version(crate_version!()).get_matches();
+fn main() -> anyhow::Result<()> {
+    let cli_args = CliArgs::parse();
 
-    let config = load_config_from_matches(&matches);
+    // Pass cli_args to a renamed/refactored version of load_config_from_matches
+    let config = load_config_from_cli_args(&cli_args);
     if config.watch {
         watch_main_loop(&config)?;
     } else {

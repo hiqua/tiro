@@ -2,7 +2,7 @@
 name = "tiro"
 version = "0.3.7"
 authors = ["Quentin Hibon <qh.public@yahoo.com>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/hiqua/tiro"
 homepage = "https://github.com/hiqua/tiro"
 description = "Planning tool"
@@ -10,16 +10,18 @@ license = "GPL-3.0-or-later"
 build = "build.rs"
 
 [dependencies]
-chrono = "=0.4.19"
-time = "=0.1.44"
+chrono = "0.4.38" # Updated from =0.4.19
+time = "=0.1.44" # Reverted to original version
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5.6"
 serde_derive = "1.0.106"
 colored = "1.9"
-clap = {version = "2.33.0", features = ["yaml"]}
-notify = "4.0.12"
+clap = { version = "4.0", features = ["derive"] }
+notify = "6.0" # Updated from 4.0.12
 # requires some libdbus library, see github page
-notify-rust = "3"
+notify-rust = "4.0" # Updated from 3
+anyhow = "1.0"
+thiserror = "1.0"
 
 [build-dependencies]
-vergen = "3"
+vergen = { version = "8.0", features = ["cargo"] } # Added "cargo" feature

@@ -5,33 +5,33 @@ use chrono::{DateTime, Local};
 mod tests {
     use crate::merge::{are_compatible, Interval};
 
-    use chrono::{Date, Local, TimeZone};
+    use chrono::{Local, TimeZone}; // Removed Date
 
     #[test]
     fn are_compatible_1() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(16, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 16, 0, 0).unwrap(),
         };
         let i2 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         assert!(are_compatible(vec![&i1, &i2]));
     }
     #[test]
     fn are_compatible_2() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         let i2 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         let i3 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         assert!(!are_compatible(vec![&i3, &i1, &i2]));
     }

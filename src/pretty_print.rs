@@ -33,7 +33,7 @@ pub fn get_output_writer(
                         start_time.year(),
                         start_time.iso_week().week()
                     ),
-                    &format!("{}", start_time.date().naive_local()),
+                    &format!("{}", start_time.date_naive()), // .date() -> .date_naive()
                     &format!("{}_{}.txt", prefix, filetime),
                 ]
                 .iter()
@@ -84,7 +84,6 @@ pub fn write_to(
 
 fn format_list_of_chunks(start_time: Timestamp, list_of_lc: &[TimedLifeChunk]) -> Vec<String> {
     let mut desc = vec![];
-    // XXX: show date as well
     let format_date = |d: Timestamp| {
         let format = "%H:%M %Y-%m-%d";
         let s = format!("-- {}", d.format(format));

@@ -1,7 +1,5 @@
-extern crate vergen;
-
 use std::process::Command;
-use vergen::{generate_cargo_keys, ConstantsFlags};
+use vergen::EmitBuilder; // Updated use statement
 
 fn is_current_repo_clean() -> bool {
     if let Ok(out) = Command::new("git")
@@ -16,7 +14,10 @@ fn is_current_repo_clean() -> bool {
 }
 
 fn main() {
-    generate_cargo_keys(ConstantsFlags::all()).expect("Unable to generate the cargo keys!");
+    EmitBuilder::builder()
+        // .all_cargo() // Removed, feature in Cargo.toml should handle this
+        .emit()
+        .expect("Unable to generate vergen keys!");
 
     let version_suffix = if is_current_repo_clean() {
         "clean"

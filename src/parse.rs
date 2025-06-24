@@ -1,18 +1,12 @@
-use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::mem::discriminant;
-use std::num::ParseIntError;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::slice::Iter;
 use std::str::FromStr;
 
-use chrono::offset::LocalResult;
-use chrono::prelude::*;
-use chrono::{Local, TimeZone};
-use time::Duration;
+use chrono::{Duration, Local, NaiveDateTime, TimeZone}; // Removed ParseError
 
 use crate::config::MetaCategory::{Quad, RegularCategory};
 use crate::config::{update_parse_state_from_config, Config, MetaCategory, Quadrant};
@@ -20,30 +14,29 @@ use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
 use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
-use crate::{TiroError, TiroResult};
+// TiroError and TiroResult removed from here
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Local, TimeZone};
-    use time::Duration;
+    use chrono::{Duration, Local, NaiveDateTime, TimeZone}; // Added NaiveDateTime for tests
 
     use crate::config::Quadrant;
-    use crate::parse::{get_life_chunk, parse_date, process_line, LineParseResult, LifeChunk};
+    use crate::parse::{get_life_chunk, parse_date, process_line, LineParseResult};
 
     #[test]
     fn parsing_1() {
-        let dt = Local.ymd(2014, 11, 28).and_hms(12, 0, 0);
+        let dt = Local.with_ymd_and_hms(2014, 11, 28, 12, 0, 0).unwrap();
         assert_eq!(
-            Local
-                .datetime_from_str("2014-11-28 12:00", "%Y-%m-%d %H:%M")
-                .ok(),
+            NaiveDateTime::parse_from_str("2014-11-28 12:00", "%Y-%m-%d %H:%M")
+                .ok()
+                .and_then(|ndt| Local.from_local_datetime(&ndt).single()),
             Some(dt)
         );
     }
 
     #[test]
     fn test_parse_date_custom_format() {
-        let dt = Local.ymd(2023, 10, 26).and_hms(14, 30, 0);
+        let dt = Local.with_ymd_and_hms(2023, 10, 26, 14, 30, 0).unwrap();
         assert_eq!(parse_date("2023-10-26 14h30"), Some(dt));
     }
 
@@ -122,7 +115,7 @@ mod tests {
     #[test]
     fn test_process_line_date() {
         let line = "2024-03-10 10:00";
-        let expected_date = Local.ymd(2024, 3, 10).and_hms(10, 0, 0);
+        let expected_date = Local.with_ymd_and_hms(2024, 3, 10, 10, 0, 0).unwrap();
         match process_line(line) {
             LineParseResult::Date { date } => assert_eq!(date, expected_date),
             _ => panic!("Expected LineParseResult::Date"),
@@ -180,11 +173,7 @@ mod tests {
     }
 }
 
-impl From<ParseIntError> for TiroError {
-    fn from(e: ParseIntError) -> Self {
-        TiroError { e: e.to_string() }
-    }
-}
+// Removed impl From<ParseIntError> for TiroError
 
 /// A continuous series of life chunks.
 ///
@@ -220,7 +209,7 @@ impl LifeLapse {
     }
 
     fn push(&mut self, item: TimedLifeChunk) {
-        self.end = self.end + item.life_chunk.duration;
+        self.end += item.life_chunk.duration;
         self.tokens.push(item);
     }
 
@@ -265,6 +254,7 @@ pub enum LineParseResult {
 
 #[derive(Clone, Debug)]
 pub struct LifeChunk {
+    #[allow(dead_code)] // Kept for potential future use (e.g., multiline descriptions) and test validation
     pub description: String,
     pub duration: Duration,
     pub categories: Vec<String>,
@@ -283,15 +273,20 @@ impl LifeChunk {
 pub fn get_all_life_lapses(
     all_activities_line: Vec<Vec<String>>,
     config: &Config,
-) -> (Timestamp, Vec<LifeLapse>) {
+) -> anyhow::Result<(Timestamp, Vec<LifeLapse>)> {
     let mut all_life_lapses = vec![];
-    let start_time = {
-        for activities_lines in all_activities_line {
-            let life_lapses = parse_activities(activities_lines.iter(), config);
-            all_life_lapses.extend(life_lapses);
-        }
-        all_life_lapses.iter().map(|ll| ll.start).min().unwrap()
-    };
+    for activities_lines in all_activities_line {
+        // parse_activities now returns a Result
+        let life_lapses = parse_activities(activities_lines.iter(), config)?;
+        all_life_lapses.extend(life_lapses);
+    }
+
+    // Handle case where all_life_lapses might be empty
+    let start_time = all_life_lapses
+        .iter()
+        .map(|ll| ll.start)
+        .min()
+        .ok_or_else(|| anyhow::anyhow!("No activities found to determine a start time. Input might be empty or contain no valid date lines."))?;
 
     all_life_lapses.sort_by_key(|ll| ll.start);
 
@@ -304,22 +299,24 @@ pub fn get_all_life_lapses(
 
     all_life_lapses = merge_strictly_compatible_lifelapses(all_life_lapses);
 
-    (start_time, all_life_lapses)
+    Ok((start_time, all_life_lapses))
 }
 
-pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse> {
+pub fn parse_activities(mut it: Iter<String>, config: &Config) -> anyhow::Result<Vec<LifeLapse>> {
     let list_of_pr = parse_all_lines(&mut it);
 
     let start_time = if let Some(Date { date }) = list_of_pr.first() {
         *date
     } else {
-        assert!(list_of_pr.is_empty());
-        return vec![];
+        // If list_of_pr is empty, it means no lines or only noop lines were found.
+        // This is a valid case, representing an empty activity set for this input.
+        assert!(list_of_pr.is_empty()); // Still good to assert this understanding
+        return Ok(vec![]); // Return an empty Vec<LifeLapse>
     };
 
     let mut parse_state = register_all_categories(&list_of_pr);
 
-    update_parse_state_from_config(config, &mut parse_state).expect("");
+    update_parse_state_from_config(config, &mut parse_state)?;
 
     let list_of_pr = parse_state.update_category_quadrants(list_of_pr);
 
@@ -341,11 +338,12 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
     }
     result.push(current_ll);
 
-    result
+    Ok(result)
 }
 
-pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
-    let file = File::open(path)?;
+pub fn read_lines_from_file(path: PathBuf) -> anyhow::Result<Vec<String>> {
+    // Pass path by reference to File::open so it's not moved
+    let file = File::open(&path)?;
     let reader = BufReader::new(file);
 
     let mut lines = vec![];
@@ -355,29 +353,24 @@ pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
     }
 
     if lines.is_empty() {
-        return Err(TiroError {
-            e: "No lines found in file.".to_string(),
-        });
+        anyhow::bail!("No lines found in file: {}", path.display());
     }
 
     Ok(lines)
 }
 
-pub fn read_stdin_lines() -> TiroResult<Vec<String>> {
+pub fn read_stdin_lines() -> anyhow::Result<Vec<String>> {
     let stdin = std::io::stdin();
     let r: Result<Vec<_>, _> = stdin.lock().lines().collect();
 
-    if let Ok(res) = r {
-        if res.is_empty() {
-            return Err(TiroError {
-                e: "No lines found in file.".to_string(),
-            });
+    match r {
+        Ok(res) => {
+            if res.is_empty() {
+                anyhow::bail!("No lines found in stdin.");
+            }
+            Ok(res)
         }
-        Ok(res)
-    } else {
-        Err(TiroError {
-            e: "Error while reading lines.".to_string(),
-        })
+        Err(e) => Err(anyhow::Error::new(e).context("Error while reading lines from stdin.")),
     }
 }
 
@@ -389,7 +382,7 @@ fn parse_category(token: &str) -> Option<MetaCategory> {
         } else {
             Some(RegularCategory {
                 description: token,
-                global_quad: None,
+                // global_quad: None, // Field removed
             })
         }
     } else {
@@ -398,32 +391,44 @@ fn parse_category(token: &str) -> Option<MetaCategory> {
 }
 
 fn parse_date(s: &str) -> Option<Timestamp> {
-    let def = || s.parse::<Timestamp>();
-    let generic_fmt = |fmt| Local.datetime_from_str(s, fmt);
+    let mut options: Vec<Option<Timestamp>> = Vec::new();
 
-    let formats = vec!["%Y-%m-%d %H:%M", "%Y-%m-%d %Hh%M"];
+    // Try direct parsing (RFC 2822 / RFC 3339 via FromStr for DateTime<Local>)
+    options.push(s.parse::<Timestamp>().ok());
 
-    let mut results = vec![def()];
-
-    for fmt in formats {
-        results.push(generic_fmt(fmt));
+    // Try custom formats
+    let custom_formats = vec!["%Y-%m-%d %H:%M", "%Y-%m-%d %Hh%M"];
+    for fmt_str in custom_formats {
+        match NaiveDateTime::parse_from_str(s, fmt_str) {
+            Ok(ndt) => {
+                // Convert NaiveDateTime to DateTime<Local>
+                // .single() handles ambiguity by returning None if not unique
+                options.push(Local.from_local_datetime(&ndt).single());
+            }
+            Err(_) => {
+                options.push(None);
+            }
+        }
     }
 
-    results.iter().find_map(|r| r.ok())
+    // Find the first successful parse
+    options.into_iter().find_map(|opt| opt)
 }
 
-pub(crate) fn get_life_chunk(line: &str) -> LifeChunk { // Made pub(crate)
+pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
+    // Made pub(crate)
     let mut tokens = line.split(|c: char| c == ',' || c.is_whitespace());
 
     let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
+        // Now chrono::Duration
         tokens
             .next()
             .and_then(|i| i.parse::<i64>().ok())
             .map(parse_as)
-            .unwrap_or_else(Duration::zero)
+            .unwrap_or_else(Duration::zero) // Use chrono::Duration::zero
     };
-    let h = parse_token_as_duration(Duration::hours);
-    let m = parse_token_as_duration(Duration::minutes);
+    let h = parse_token_as_duration(Duration::hours); // Use chrono::Duration::hours
+    let m = parse_token_as_duration(Duration::minutes); // Use chrono::Duration::minutes
 
     let duration = h + m;
 
@@ -455,13 +460,12 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk { // Made pub(crate)
     let description = newline.join(" ");
 
     // XXX: what to do if description is empty (categories self-explaining). Could have None instead.
-    let qu = quadrant.or_else(|| Some(Default::default())).unwrap();
+    let qu = quadrant.unwrap_or_default(); // Simplified from or_else(|| Some(Default::default())).unwrap()
     LifeChunk {
         description,
         duration,
         categories,
-        // XXX: redundant default
-        quadrant: qu,
+        quadrant: qu, // XXX: redundant default - this comment refers to Quadrant::default() being Q6, if qu is also Q6.
         user_provided_quadrant: quadrant.is_some(),
         input: to_join.join(" "),
     }
@@ -515,7 +519,7 @@ fn tokens_from_timed_lpr(
                     start: curr_time,
                     life_chunk,
                 };
-                curr_time = curr_time + duration;
+                curr_time += duration;
                 tiro_tokens.push(TiroToken::Tlc { tlc })
             }
             Date { date } => {
