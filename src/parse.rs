@@ -27,9 +27,10 @@ mod tests {
     use chrono::{Local, TimeZone};
     use time::Duration;
 
-    use chrono::NaiveTime;
+    use chrono::NaiveTime; // Added for new tests
     use crate::config::{Config, Quadrant}; // Added Config
-    use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult, LifeLapse, parse_activities}; // Added LifeLapse, parse_activities
+    // Added LifeLapse, parse_activities for new tests
+    use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult, LifeLapse, parse_activities};
 
     #[test]
     fn parsing_1() {
@@ -80,7 +81,7 @@ mod tests {
         assert_eq!(lc.categories, vec!["@Dev".to_string()]);
         assert_eq!(lc.quadrant, Quadrant::default());
         assert!(!lc.user_provided_quadrant);
-        assert_eq!(lc.get_input(), "그냥 프로젝트 작업 @Dev"); // Expect full line as input part
+        assert_eq!(lc.get_input(), "그냥 프로젝트 작업 @Dev"); // Expect full non-prefix line as input part
     }
 
     #[test]
@@ -133,14 +134,13 @@ mod tests {
 
     #[test]
     fn test_get_life_chunk_end_time_with_category_first() {
-        // Test case where category might appear before description parts after time
         let line = ">09:30 @MorningRoutine Breakfast";
         let lc = get_life_chunk(line);
-        assert_eq!(lc.description, "Breakfast");
+        assert_eq!(lc.description, "Breakfast"); // Category should not be part of desc if parsed
         assert!(lc.is_end_time_specified);
         assert_eq!(lc.end_time, Some(NaiveTime::from_hms(9, 30, 0)));
         assert_eq!(lc.categories, vec!["@MorningRoutine".to_string()]);
-        assert_eq!(lc.get_input(), "@MorningRoutine Breakfast");
+        assert_eq!(lc.get_input(), "@MorningRoutine Breakfast"); // Input is post-time-spec
     }
 
     #[test]
@@ -158,29 +158,29 @@ mod tests {
     fn test_get_life_chunk_end_time_invalid_format() {
         let line = ">1700 Meeting @Work"; // Invalid time format
         let lc = get_life_chunk(line);
-        assert_eq!(lc.description, ">1700 Meeting"); // Treated as part of description
+        // Should be treated as part of description because time parsing fails
+        assert_eq!(lc.description, ">1700 Meeting");
         assert!(!lc.is_end_time_specified);
         assert_eq!(lc.end_time, None);
-        assert_eq!(lc.duration, Duration::zero());
+        assert_eq!(lc.duration, Duration::zero()); // No valid H M duration parsed either
         assert_eq!(lc.categories, vec!["@Work".to_string()]);
-        assert_eq!(lc.get_input(), ">1700 Meeting @Work");
+        assert_eq!(lc.get_input(), ">1700 Meeting @Work"); // Full line becomes input part
     }
 
     #[test]
     fn test_get_life_chunk_end_time_just_arrow() {
         let line = "> Meeting @Work"; // Just arrow, no time
         let lc = get_life_chunk(line);
-        assert_eq!(lc.description, "> Meeting"); // Treated as part of description
+        assert_eq!(lc.description, "> Meeting");
         assert!(!lc.is_end_time_specified);
         assert_eq!(lc.end_time, None);
         assert_eq!(lc.duration, Duration::zero());
         assert_eq!(lc.categories, vec!["@Work".to_string()]);
-         assert_eq!(lc.get_input(), "> Meeting @Work");
+        assert_eq!(lc.get_input(), "> Meeting @Work");
     }
 
-
     #[test]
-    fn test_get_life_chunk_standard_duration() {
+    fn test_get_life_chunk_standard_duration_still_works() { // Renamed for clarity
         let line = "1 15 Coding @Dev";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Coding");
@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_life_chunk_only_description() {
+    fn test_get_life_chunk_only_description_no_time_spec() { // Renamed for clarity
         let line = "Simple task";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Simple task");
@@ -236,8 +236,8 @@ mod tests {
         let line = "# This is a comment";
         match process_line(line) {
             LineParseResult::Lc { life_chunk: lc } => {
-                // If a comment line is fed directly to process_line (bypassing is_noop),
-                // get_life_chunk will treat '#' as part of the description.
+                // If a comment line is fed directly to process_line (bypassing is_noop from parse_all_lines),
+                // get_life_chunk will treat '#' as part of the description if not parsed as duration/time.
                 assert_eq!(lc.description, "# This is a comment");
                 assert_eq!(lc.duration, Duration::zero());
                 assert_eq!(lc.categories, Vec::<String>::new());
@@ -457,7 +457,7 @@ pub enum LineParseResult {
     Date { date: Timestamp },
 }
 
-use chrono::NaiveTime;
+use chrono::NaiveTime; // Ensure NaiveTime is imported
 
 #[derive(Clone, Debug)]
 pub struct LifeChunk {
@@ -467,8 +467,8 @@ pub struct LifeChunk {
     pub quadrant: Quadrant,
     pub user_provided_quadrant: bool,
     input: String,
-    pub end_time: Option<NaiveTime>,
-    pub is_end_time_specified: bool,
+    pub end_time: Option<NaiveTime>, // Added
+    pub is_end_time_specified: bool, // Added
 }
 
 impl LifeChunk {
@@ -524,31 +524,27 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
     let tiro_tokens = tokens_from_timed_lpr(list_of_pr, start_time);
 
     let mut result = vec![];
-    let mut current_ll = LifeLapse::new(start_time);
+    let mut current_ll = LifeLapse::new(start_time); // Initialized with the definite start time.
     let mut first_date_token_processed = false;
 
     // The first token in tiro_tokens should always be a Date token corresponding to start_time
     // if list_of_pr was not empty and started with a Date.
-    // Or, if list_of_pr was empty, tiro_tokens is empty, and this loop doesn't run.
 
     for tok in tiro_tokens {
         match tok {
             TiroToken::Tlc { tlc } => {
-                // If by some chance (e.g. file starts with activity, no date)
-                // current_ll might not be properly initialized if we didn't have an initial Date token.
-                // However, parse_all_lines and subsequent start_time logic ensures a start_time.
                 current_ll.push(tlc);
             }
             TiroToken::Date { date } => {
                 if !first_date_token_processed {
-                    // This is the first Date token, it matches the initial start_time.
+                    // This is the first Date token, it usually matches the initial start_time.
                     // Re-initialize current_ll to ensure it's clean and uses this specific date object.
                     current_ll = LifeLapse::new(date);
                     first_date_token_processed = true;
                 } else {
                     // This is a subsequent Date token, indicating a new day or explicit time set.
                     // The previous LifeLapse is complete.
-                    if !current_ll.is_empty() {
+                    if !current_ll.is_empty() { // Avoid pushing empty lapses
                         result.push(current_ll);
                     }
                     current_ll = LifeLapse::new(date);
@@ -635,8 +631,9 @@ fn parse_date(s: &str) -> Option<Timestamp> {
 
 pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     // Made pub(crate)
-    let tokens_iter = line.split(|c: char| c == ',' || c.is_whitespace());
-    let tokens: Vec<&str> = tokens_iter.collect(); // Collect to allow peeking/modifying
+    let tokens_iter = line.split(|c: char| c == ',' || c.is_whitespace()); // Removed mut
+    // Filter out empty strings that can result from multiple spaces
+    let tokens: Vec<&str> = tokens_iter.filter(|s| !s.is_empty()).collect();
 
     let mut duration = Duration::zero();
     let mut end_time: Option<NaiveTime> = None;
@@ -646,48 +643,54 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     if !tokens.is_empty() {
         let first_token = tokens[0];
         if first_token.starts_with('>') {
-            if first_token.len() > 1 { // Ensure there's something after '>'
+            if first_token.len() > 1 { // Ensure there's something after '>' e.g. ">10:00"
                 let time_str = &first_token[1..];
                 if let Ok(parsed_time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
                     end_time = Some(parsed_time);
                     is_end_time_specified = true;
+                    // duration remains Duration::zero(), will be calculated in tokens_from_timed_lpr
                     description_offset = 1;
                 } else {
-                    // Token starts with '>' but is not a valid time, treat as part of description
+                    // Token starts with '>' but is not a valid time (e.g., ">foo", ">123"). Treat as part of description.
+                    // description_offset remains 0. duration, end_time, is_end_time_specified remain default.
                 }
             }
-            // If token is just ">", it's part of description
+            // If token is just ">", it's part of description. description_offset remains 0.
         } else {
             // Try to parse as H M duration
-            let mut h_opt = None;
-            let mut m_opt = None;
-            let mut current_offset = 0;
+            let mut h_opt: Option<i64> = None;
+            let mut m_opt: Option<i64> = None;
+            let mut current_offset_for_duration = 0;
 
-            if let Some(token_val) = tokens.get(0) {
-                if let Ok(h_val) = token_val.parse::<i64>() {
-                    h_opt = Some(Duration::hours(h_val));
-                    current_offset += 1;
+            if let Some(token_val_h) = tokens.get(0) {
+                if let Ok(h_val) = token_val_h.parse::<i64>() {
+                    h_opt = Some(h_val);
+                    current_offset_for_duration += 1;
                     if let Some(token_val_m) = tokens.get(1) {
                         if let Ok(m_val) = token_val_m.parse::<i64>() {
-                            m_opt = Some(Duration::minutes(m_val));
-                            current_offset += 1;
+                            m_opt = Some(m_val);
+                            current_offset_for_duration += 1;
                         }
+                        // If the second token exists but is not a number, m_opt remains None.
+                        // current_offset_for_duration is already 1 (for hours).
                     }
                 }
             }
 
-            if h_opt.is_some() || m_opt.is_some() {
-                 duration = h_opt.unwrap_or_else(Duration::zero) + m_opt.unwrap_or_else(Duration::zero);
-                 description_offset = current_offset;
+            if h_opt.is_some() || m_opt.is_some() { // If at least hours or minutes were successfully parsed
+                 duration = Duration::hours(h_opt.unwrap_or(0)) + Duration::minutes(m_opt.unwrap_or(0));
+                 description_offset = current_offset_for_duration;
+                 // is_end_time_specified remains false, end_time remains None
             }
+            // If neither h_opt nor m_opt is Some, all fields remain at their initial values (duration=0, offset=0 etc.)
         }
     }
 
     // Adjust tokens slice to get remaining parts for description and categories
-    let remaining_tokens = if tokens.len() > description_offset {
+    let remaining_tokens = if tokens.len() >= description_offset {
         &tokens[description_offset..]
     } else {
-        &[]
+        &[] // Should not happen if tokens.len() >= description_offset is proper
     };
 
     let mut newline: Vec<&str> = vec![];
@@ -695,11 +698,11 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
 
     let mut quadrant = None;
 
-    let mut to_join_input: Vec<&str> = vec![]; // For reconstructing the input string
+    let mut to_join = vec![]; // This will be for the 'input' field
     // XXX: should check compatibility of quadrants, in case there are several options
-    for t in remaining_tokens {
-        to_join_input.push(t);
-        if let Some(mc) = parse_category(t) {
+    for &t in remaining_tokens { // Iterate by reference, t is &str
+        to_join.push(t); // t is &str
+        if let Some(mc) = parse_category(t) { // t is &str
             match mc {
                 Quad { quadrant: q } => {
                     quadrant = Some(q);
@@ -709,9 +712,9 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
                     categories.push(String::from(description));
                 }
             }
-            // If it's a category, don't add to description tokens (newline)
             continue;
         }
+
         newline.push(t);
     }
 
@@ -721,13 +724,13 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     let qu = quadrant.or_else(|| Some(Default::default())).unwrap();
     LifeChunk {
         description,
-        duration, // This is either parsed H M duration or Duration::zero() if >HH:MM
+        duration, // This is the parsed H M duration, or Duration::zero() if >HH:MM was parsed
         categories,
         quadrant: qu,
         user_provided_quadrant: quadrant.is_some(),
-        input: to_join_input.join(" "), // This should represent the part after duration/time
-        end_time, // Parsed from >HH:MM or None
-        is_end_time_specified, // Set based on >HH:MM parsing
+        input: to_join.join(" "),
+        end_time, // Use the local variable `end_time`
+        is_end_time_specified, // Use the local variable `is_end_time_specified`
     }
 }
 
@@ -778,37 +781,43 @@ fn tokens_from_timed_lpr(
                     if let Some(end_naive_time) = life_chunk.end_time {
                         let start_naive_time = curr_time.time();
                         let duration_std = if end_naive_time >= start_naive_time {
+                            // Same day
                             end_naive_time.signed_duration_since(start_naive_time)
                         } else {
                             // Overnight case
-                            // Combine current date with end_naive_time, then add 1 day
-                            let end_datetime_today = curr_time.date().and_time(end_naive_time);
-                            let end_datetime_tomorrow = end_datetime_today.map(|dt| dt + chrono::Duration::days(1));
-
-                            if let (Some(edt), Some(curr_dt_for_calc)) = (end_datetime_tomorrow, Some(curr_time)) {
-                                edt.signed_duration_since(curr_dt_for_calc)
-                            } else {
-                                // Fallback or error if date combination fails (should not happen with valid NaiveTime)
-                                chrono::Duration::zero()
+                            // Combine current date with end_naive_time for today, then add 1 day to this end_datetime
+                            let end_datetime_on_current_date = curr_time.date().and_time(end_naive_time);
+                            match end_datetime_on_current_date {
+                                Some(edt_today) => {
+                                    let end_datetime_tomorrow = edt_today + chrono::Duration::days(1);
+                                    end_datetime_tomorrow.signed_duration_since(curr_time)
+                                }
+                                None => {
+                                    // This case should ideally not be reached if NaiveTime is valid.
+                                    // Fallback to zero duration if date combination fails.
+                                    chrono::Duration::zero()
+                                }
                             }
                         };
                         // Convert chrono::Duration to time::Duration
                         Duration::seconds(duration_std.num_seconds())
                     } else {
-                        // This case should ideally not happen if is_end_time_specified is true
-                        life_chunk.duration // fallback to pre-parsed duration (which is likely zero)
+                        // This case implies is_end_time_specified is true, but end_time is None.
+                        // Should not happen with correct parsing in get_life_chunk. Fallback to parsed duration (likely zero).
+                        life_chunk.duration
                     }
                 } else {
+                    // Not end-time specified, use duration parsed by get_life_chunk (which is H M or zero)
                     life_chunk.duration
                 };
 
-                life_chunk.duration = actual_duration; // Update life_chunk with calculated duration
+                life_chunk.duration = actual_duration; // Update life_chunk with calculated or original duration
 
                 let tlc = TimedLifeChunk {
                     start: curr_time,
                     life_chunk, // life_chunk now has the correct duration
                 };
-                curr_time = curr_time + actual_duration;
+                curr_time = curr_time + actual_duration; // Advance curr_time by the actual_duration
                 tiro_tokens.push(TiroToken::Tlc { tlc })
             }
             Date { date } => {
