@@ -9,6 +9,7 @@ use chrono::Datelike;
 use colored::control::{set_override, unset_override};
 use colored::Color;
 use colored::*;
+use chrono::Duration as ChronoDuration; // Added for gap calculation
 
 use crate::config::Quadrant;
 use crate::config::Quadrant::*;
@@ -61,10 +62,39 @@ pub fn get_output_writer(
 
 pub fn format_lifelapses(lifelapses: &[LifeLapse]) -> Vec<String> {
     let mut lines = vec![];
+    let mut previous_end_time: Option<Timestamp> = None;
+
     for ll in lifelapses {
+        if let Some(prev_end) = previous_end_time {
+            let gap = ll.start().signed_duration_since(prev_end);
+            if gap > ChronoDuration::zero() {
+                lines.push(format_gap_duration(gap));
+            }
+        }
         lines.extend(format_list_of_chunks(ll.start(), ll.tokens_as_ref()));
+        previous_end_time = Some(ll.end());
     }
     lines
+}
+
+fn format_gap_duration(duration: ChronoDuration) -> String {
+    let hours = duration.num_hours();
+    let minutes = duration.num_minutes() % 60;
+
+    let mut parts = Vec::new();
+    if hours > 0 {
+        parts.push(format!("{} hour{}", hours, if hours == 1 { "" } else { "s" }));
+    }
+    if minutes > 0 {
+        parts.push(format!("{} minute{}", minutes, if minutes == 1 { "" } else { "s" }));
+    }
+
+    if parts.is_empty() {
+        // This case should ideally not be reached if we only call for gaps > 0
+        return String::from("Minimal gap");
+    }
+
+    format!("--- Gap of {} ---", parts.join(" ")).italic().to_string()
 }
 
 /// Need this producer because the coloring won't be flexible otherwise

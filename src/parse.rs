@@ -236,6 +236,10 @@ impl LifeLapse {
         self.start
     }
 
+    pub fn end(&self) -> Timestamp {
+        self.end
+    }
+
     pub fn is_right_before(&self, other: &LifeLapse) -> bool {
         self.end == other.start
     }
