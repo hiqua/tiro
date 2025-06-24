@@ -12,14 +12,17 @@ use std::ops::Add;
 
 #[cfg(test)]
 mod tests {
-    use crate::summary::{format_duration, compute_summary, Summary, compute_context_summary, CategorySummary, format_category_summary, format_category_summary_with_note};
-    use crate::parse::{LifeChunk, TimedLifeChunk};
     use crate::config::Quadrant;
-    use chrono::{Local, TimeZone, Utc, Date, Datelike};
-    use time::Duration;
-    use std::collections::HashMap;
     use crate::parse::get_life_chunk;
-    use colored::Colorize; // For asserting bolded dates
+    use crate::parse::{LifeChunk, TimedLifeChunk};
+    use crate::summary::{
+        compute_context_summary, compute_summary, format_category_summary,
+        format_category_summary_with_note, format_duration, CategorySummary, Summary,
+    };
+    use chrono::{Date, Datelike, Local, TimeZone, Utc};
+    use colored::Colorize;
+    use std::collections::HashMap;
+    use time::Duration; // For asserting bolded dates
 
     // Helper to create TimedLifeChunk for tests using get_life_chunk
     // The start time of TimedLifeChunk is not used by compute_summary, so it can be arbitrary.
@@ -46,8 +49,8 @@ mod tests {
     fn test_compute_summary_basic() {
         let timed_life_chunks = vec![
             create_timed_chunk_from_line("0 30 Task 1 @work @projA"), // Duration 30m, cats @work, @projA
-            create_timed_chunk_from_line("1 0 Task 2 @work"),        // Duration 60m, cats @work
-            create_timed_chunk_from_line("0 15 Task 3 @home"),       // Duration 15m, cats @home
+            create_timed_chunk_from_line("1 0 Task 2 @work"),         // Duration 60m, cats @work
+            create_timed_chunk_from_line("0 15 Task 3 @home"),        // Duration 15m, cats @home
         ];
 
         let summary = compute_summary(&timed_life_chunks);
@@ -70,15 +73,18 @@ mod tests {
     fn test_compute_summary_empty_input() {
         let timed_life_chunks: Vec<TimedLifeChunk> = vec![];
         let summary = compute_summary(&timed_life_chunks);
-        assert!(summary.is_empty(), "Summary should be empty for empty input");
+        assert!(
+            summary.is_empty(),
+            "Summary should be empty for empty input"
+        );
     }
 
     #[test]
     fn test_compute_summary_no_categories_in_chunks() {
         let timed_life_chunks = vec![
-            create_timed_chunk_from_line("0 30 Task 1 no cat"),            // No categories
-            create_timed_chunk_from_line("1 0 Task 2 with cat @work"),   // @work
-            create_timed_chunk_from_line("0 15 Task 3 no cat again"),       // No categories
+            create_timed_chunk_from_line("0 30 Task 1 no cat"), // No categories
+            create_timed_chunk_from_line("1 0 Task 2 with cat @work"), // @work
+            create_timed_chunk_from_line("0 15 Task 3 no cat again"), // No categories
         ];
 
         let summary = compute_summary(&timed_life_chunks);
@@ -88,7 +94,11 @@ mod tests {
 
         assert_eq!(summary.len(), expected_summary.len());
         assert_eq!(summary.get("@work"), expected_summary.get("@work"));
-        assert_eq!(summary.get(""), None, "Empty category string should not be added by get_life_chunk or summary");
+        assert_eq!(
+            summary.get(""),
+            None,
+            "Empty category string should not be added by get_life_chunk or summary"
+        );
     }
 
     #[test]
@@ -139,7 +149,10 @@ mod tests {
     fn test_compute_context_summary_empty() {
         let contexts: HashMap<String, Duration> = HashMap::new();
         let result = compute_context_summary(&contexts);
-        assert!(result.is_empty(), "Expected empty vector for empty input HashMap");
+        assert!(
+            result.is_empty(),
+            "Expected empty vector for empty input HashMap"
+        );
     }
 
     #[test]
@@ -201,8 +214,14 @@ mod tests {
         let test_date = get_test_date();
         let date_str_bold = test_date.to_string().bold().to_string();
         let ctg_summary_vec = vec![
-            CategorySummary { name: "@food", duration: Duration::minutes(45) },
-            CategorySummary { name: "@sleep", duration: Duration::hours(8) },
+            CategorySummary {
+                name: "@food",
+                duration: Duration::minutes(45),
+            },
+            CategorySummary {
+                name: "@sleep",
+                duration: Duration::hours(8),
+            },
         ];
         // compute_context_summary sorts its output. If this Vec is manually created and not sorted,
         // and if format_category_summary relies on a specific order without re-sorting, tests could be flaky.
@@ -223,9 +242,10 @@ mod tests {
         let test_date = get_test_date();
         let date_str_bold = test_date.to_string().bold().to_string();
         let note = "(daily workout)";
-        let ctg_summary_vec = vec![
-            CategorySummary { name: "@exercise", duration: Duration::hours(1) + Duration::minutes(15) },
-        ];
+        let ctg_summary_vec = vec![CategorySummary {
+            name: "@exercise",
+            duration: Duration::hours(1) + Duration::minutes(15),
+        }];
 
         let result = format_category_summary_with_note(ctg_summary_vec, test_date, note);
 

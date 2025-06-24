@@ -33,18 +33,7 @@ mod summary;
 
 type Writer = (Box<dyn Write>, bool);
 
-#[derive(Debug)]
-pub struct TiroError {
-    e: String,
-}
-
-type TiroResult<T> = Result<T, TiroError>;
-
-impl fmt::Display for TiroError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Oh no, something bad went down: {}", self.e)
-    }
-}
+type TiroResult<T> = anyhow::Result<T>;
 
 fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)> {
     // START PARSE

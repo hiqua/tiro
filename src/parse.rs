@@ -20,7 +20,7 @@ use crate::merge::merge_strictly_compatible_lifelapses;
 use crate::parse::LineParseResult::{Date, Lc};
 use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
-use crate::{TiroError, TiroResult};
+use crate::TiroResult;
 
 #[cfg(test)]
 mod tests {
@@ -28,7 +28,7 @@ mod tests {
     use time::Duration;
 
     use crate::config::Quadrant;
-    use crate::parse::{get_life_chunk, parse_date, process_line, LineParseResult, LifeChunk};
+    use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult};
 
     #[test]
     fn parsing_1() {
@@ -177,12 +177,6 @@ mod tests {
             }
             _ => panic!("Expected LineParseResult::Lc for an empty line"),
         }
-    }
-}
-
-impl From<ParseIntError> for TiroError {
-    fn from(e: ParseIntError) -> Self {
-        TiroError { e: e.to_string() }
     }
 }
 
@@ -355,9 +349,7 @@ pub fn read_lines_from_file(path: PathBuf) -> TiroResult<Vec<String>> {
     }
 
     if lines.is_empty() {
-        return Err(TiroError {
-            e: "No lines found in file.".to_string(),
-        });
+        return Err(anyhow::anyhow!("No lines found in file."));
     }
 
     Ok(lines)
@@ -369,15 +361,11 @@ pub fn read_stdin_lines() -> TiroResult<Vec<String>> {
 
     if let Ok(res) = r {
         if res.is_empty() {
-            return Err(TiroError {
-                e: "No lines found in file.".to_string(),
-            });
+            return Err(anyhow::anyhow!("No lines found in file."));
         }
         Ok(res)
     } else {
-        Err(TiroError {
-            e: "Error while reading lines.".to_string(),
-        })
+        Err(anyhow::anyhow!("Error while reading lines."))
     }
 }
 
@@ -412,7 +400,8 @@ fn parse_date(s: &str) -> Option<Timestamp> {
     results.iter().find_map(|r| r.ok())
 }
 
-pub(crate) fn get_life_chunk(line: &str) -> LifeChunk { // Made pub(crate)
+pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
+    // Made pub(crate)
     let mut tokens = line.split(|c: char| c == ',' || c.is_whitespace());
 
     let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
