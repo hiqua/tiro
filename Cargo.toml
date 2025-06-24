@@ -20,10 +20,11 @@ clap = {version = "2.33.0", features = ["yaml"]}
 notify = "4.0.12"
 # requires some libdbus library, see github page
 notify-rust = "3"
+anyhow = "1.0"
 
 [build-dependencies]
 vergen = "3"
 
 [dev-dependencies]
-quickcheck = "1.0.3"
-quickcheck_macros = "1.0.0"
+quickcheck = "1"
+quickcheck_macros = "1"

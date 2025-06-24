@@ -33,20 +33,7 @@ mod summary;
 
 type Writer = (Box<dyn Write>, bool);
 
-#[derive(Debug)]
-pub struct TiroError {
-    e: String,
-}
-
-type TiroResult<T> = Result<T, TiroError>;
-
-impl fmt::Display for TiroError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Oh no, something bad went down: {}", self.e)
-    }
-}
-
-fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)> {
+fn main_loop(config: &Config) -> anyhow::Result<(Sender<()>, Option<JoinHandle<()>>)> {
     // START PARSE
     let file_paths = config.get_file_paths();
     let all_activities_line = get_all_lines(Box::new(file_paths.into_iter()))?;
@@ -87,7 +74,7 @@ fn main_loop(config: &Config) -> TiroResult<(Sender<()>, Option<JoinHandle<()>>)
 }
 
 /// Should be allowed to fail, after some timeouts or number of attempts.
-fn watch_main_loop(config: &Config) -> TiroResult<()> {
+fn watch_main_loop(config: &Config) -> anyhow::Result<()> {
     let (tx, rx) = channel();
 
     // XXX: infinite loop, causes problems, how to make it reasonable?
@@ -140,7 +127,7 @@ fn watch_main_loop(config: &Config) -> TiroResult<()> {
     }
 }
 
-fn main() -> TiroResult<()> {
+fn main() -> anyhow::Result<()> {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).version(crate_version!()).get_matches();
 
