@@ -13,7 +13,7 @@ use serde_derive::Serialize;
 use toml::de::Error;
 
 use crate::parse_state::ParseState;
-use anyhow::Result as TiroResult;
+use anyhow::Result;
 
 pub type Category = str;
 
@@ -58,7 +58,7 @@ mod tests {
 
     use crate::config::{load_config, update_parse_state_from_config, Config, Quadrant};
     use crate::parse_state::ParseState;
-    use anyhow::Error as TiroError; // For asserting error types - now anyhow::Error
+    use anyhow::Error; // For asserting error types - now anyhow::Error
 
     use serde_derive::Deserialize;
     use serde_derive::Serialize;
@@ -409,7 +409,7 @@ pub enum Quadrant {
 impl FromStr for Quadrant {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> anyhow::Result<Self> {
         match s {
             "@1" => Ok(Quadrant::Q1),
             "@2" => Ok(Quadrant::Q2),
@@ -447,7 +447,7 @@ impl fmt::Display for Quadrant {
     }
 }
 
-fn convert_raw_config(raw_config: RawConfig) -> TiroResult<Config> {
+fn convert_raw_config(raw_config: RawConfig) -> Result<Config> {
     let mut map = HashMap::new();
 
     for (k, v) in raw_config.quadrants.iter() {
@@ -513,7 +513,7 @@ fn get_activity_file_path_from_matches(matches: &ArgMatches) -> Vec<PathBuf> {
     res
 }
 
-fn load_config(path: &str) -> TiroResult<Config> {
+fn load_config(path: &str) -> Result<Config> {
     let config_str = fs::read_to_string(path)?;
     let raw_config: RawConfig = toml::from_str(&config_str)?;
 
@@ -526,7 +526,7 @@ fn load_config(path: &str) -> TiroResult<Config> {
 pub fn update_parse_state_from_config(
     config: &Config,
     parse_state: &mut ParseState,
-) -> TiroResult<()> {
+) -> Result<()> {
     for (q, v) in config.quadrants.iter() {
         for s in v {
             if !parse_state.categories_to_quadrant.contains_key(s) {
