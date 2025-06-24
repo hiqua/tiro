@@ -27,8 +27,9 @@ mod tests {
     use chrono::{Local, TimeZone};
     use time::Duration;
 
-    use crate::config::Quadrant;
+    use crate::config::{Config, Quadrant}; // Added Config
     use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult};
+    use super::parse_activities; // Added parse_activities
 
     #[test]
     fn parsing_1() {
@@ -44,7 +45,7 @@ mod tests {
     #[test]
     fn test_parse_date_custom_format() {
         let dt = Local.ymd(2023, 10, 26).and_hms(14, 30, 0);
-        assert_eq!(parse_date("2023-10-26 14h30"), Some(dt));
+        assert_eq!(parse_date("2023-10-26 14h30"), Some((dt, false)));
     }
 
     #[test]
@@ -55,6 +56,24 @@ mod tests {
     #[test]
     fn test_parse_date_empty_string() {
         assert_eq!(parse_date(""), None);
+    }
+
+    #[test]
+    fn test_parse_date_date_only() {
+        let expected_dt = Local.ymd(2024, 3, 15).and_hms(0, 0, 0);
+        assert_eq!(parse_date("2024-03-15"), Some((expected_dt, true)));
+    }
+
+    #[test]
+    fn test_parse_date_datetime_normal() {
+        let expected_dt = Local.ymd(2024, 3, 15).and_hms(10, 30, 0);
+        assert_eq!(parse_date("2024-03-15 10:30"), Some((expected_dt, false)));
+    }
+
+    #[test]
+    fn test_parse_date_datetime_custom_h() {
+        let expected_dt = Local.ymd(2024, 3, 15).and_hms(11, 20, 0);
+        assert_eq!(parse_date("2024-03-15 11h20"), Some((expected_dt, false)));
     }
 
     // Tests for get_life_chunk
@@ -124,8 +143,24 @@ mod tests {
         let line = "2024-03-10 10:00";
         let expected_date = Local.ymd(2024, 3, 10).and_hms(10, 0, 0);
         match process_line(line) {
-            LineParseResult::Date { date } => assert_eq!(date, expected_date),
+            LineParseResult::Date { date, is_date_only } => {
+                assert_eq!(date, expected_date);
+                assert!(!is_date_only, "Expected is_date_only to be false for full timestamp");
+            }
             _ => panic!("Expected LineParseResult::Date"),
+        }
+    }
+
+    #[test]
+    fn test_process_line_date_only_header() {
+        let line = "2024-03-11";
+        let expected_date = Local.ymd(2024, 3, 11).and_hms(0, 0, 0);
+        match process_line(line) {
+            LineParseResult::Date { date, is_date_only } => {
+                assert_eq!(date, expected_date);
+                assert!(is_date_only, "Expected is_date_only to be true for date-only header");
+            }
+            _ => panic!("Expected LineParseResult::Date for date-only header"),
         }
     }
 
@@ -177,6 +212,137 @@ mod tests {
             }
             _ => panic!("Expected LineParseResult::Lc for an empty line"),
         }
+    }
+
+    #[test]
+    fn test_parse_activities_timeless_simple() {
+        let lines = vec![
+            "2024-03-12".to_string(),
+            "0 30 Timeless Activity 1 @TestCat".to_string(),
+            "1 15 Timeless Activity 2 @TestCat @AnotherCat".to_string(),
+        ];
+        let config = Config::default();
+        let life_lapses = parse_activities(lines.iter(), &config);
+
+        assert_eq!(life_lapses.len(), 1, "Should produce one LifeLapse");
+        let lapse = &life_lapses[0];
+        let expected_start_time = Local.ymd(2024, 3, 12).and_hms(0, 0, 0);
+        assert_eq!(lapse.start(), expected_start_time, "LifeLapse start time should be midnight");
+
+        let tokens = lapse.tokens_as_ref();
+        assert_eq!(tokens.len(), 2, "LifeLapse should have two tokens");
+
+        // Token 1
+        assert_eq!(tokens[0].start, expected_start_time, "Token 1 start time");
+        assert_eq!(tokens[0].life_chunk.description, "Timeless Activity 1");
+        assert_eq!(tokens[0].life_chunk.duration, Duration::minutes(30));
+        assert_eq!(tokens[0].life_chunk.categories, vec!["@TestCat".to_string()]);
+
+        // Token 2
+        assert_eq!(tokens[1].start, expected_start_time, "Token 2 start time"); // Still midnight
+        assert_eq!(tokens[1].life_chunk.description, "Timeless Activity 2");
+        assert_eq!(tokens[1].life_chunk.duration, Duration::hours(1) + Duration::minutes(15));
+        assert_eq!(tokens[1].life_chunk.categories, vec!["@TestCat".to_string(), "@AnotherCat".to_string()]);
+
+        let expected_total_duration = Duration::minutes(30) + Duration::hours(1) + Duration::minutes(15);
+        assert_eq!(lapse.total_duration(), expected_total_duration, "LifeLapse total duration");
+        assert_eq!(lapse.end, expected_start_time + expected_total_duration, "LifeLapse end time");
+    }
+
+    #[test]
+    fn test_parse_activities_mixed_timed_and_timeless() {
+        let lines = vec![
+            "2024-03-13 10:00".to_string(), // Timed block starts
+            "1 0 Timed Activity 1 @Work".to_string(),      // Ends 11:00
+            "0 30 Timed Activity 2 @Work".to_string(),      // Ends 11:30
+            "2024-03-13".to_string(),       // Timeless block for the same day
+            "0 20 Timeless A @Play".to_string(),
+            "0 25 Timeless B @Play".to_string(),
+            "2024-03-13 14:00".to_string(), // New timed block
+            "2 0 Timed Activity 3 @Work".to_string(),      // Ends 16:00
+        ];
+        let config = Config::default();
+        let life_lapses = parse_activities(lines.iter(), &config);
+
+        assert_eq!(life_lapses.len(), 3, "Should produce three LifeLapses");
+
+        // First LifeLapse (Timed)
+        let lapse1 = &life_lapses[0];
+        let expected_start1 = Local.ymd(2024, 3, 13).and_hms(10, 0, 0);
+        assert_eq!(lapse1.start(), expected_start1);
+        assert_eq!(lapse1.tokens_as_ref().len(), 2);
+        assert_eq!(lapse1.tokens_as_ref()[0].start, expected_start1);
+        assert_eq!(lapse1.tokens_as_ref()[0].life_chunk.duration, Duration::hours(1));
+        assert_eq!(lapse1.tokens_as_ref()[1].start, expected_start1 + Duration::hours(1));
+        assert_eq!(lapse1.tokens_as_ref()[1].life_chunk.duration, Duration::minutes(30));
+        assert_eq!(lapse1.end, expected_start1 + Duration::hours(1) + Duration::minutes(30));
+
+        // Second LifeLapse (Timeless)
+        let lapse2 = &life_lapses[1];
+        let expected_start_timeless = Local.ymd(2024, 3, 13).and_hms(0, 0, 0);
+        assert_eq!(lapse2.start(), expected_start_timeless);
+        assert_eq!(lapse2.tokens_as_ref().len(), 2);
+        assert_eq!(lapse2.tokens_as_ref()[0].start, expected_start_timeless); // Timeless start
+        assert_eq!(lapse2.tokens_as_ref()[0].life_chunk.duration, Duration::minutes(20));
+        assert_eq!(lapse2.tokens_as_ref()[1].start, expected_start_timeless); // Timeless start
+        assert_eq!(lapse2.tokens_as_ref()[1].life_chunk.duration, Duration::minutes(25));
+        assert_eq!(lapse2.end, expected_start_timeless + Duration::minutes(20) + Duration::minutes(25));
+
+        // Third LifeLapse (Timed)
+        let lapse3 = &life_lapses[2];
+        let expected_start3 = Local.ymd(2024, 3, 13).and_hms(14, 0, 0);
+        assert_eq!(lapse3.start(), expected_start3);
+        assert_eq!(lapse3.tokens_as_ref().len(), 1);
+        assert_eq!(lapse3.tokens_as_ref()[0].start, expected_start3);
+        assert_eq!(lapse3.tokens_as_ref()[0].life_chunk.duration, Duration::hours(2));
+        assert_eq!(lapse3.end, expected_start3 + Duration::hours(2));
+    }
+
+    #[test]
+    fn test_parse_activities_timeless_then_timed() {
+        let lines = vec![
+            "2024-03-14".to_string(),       // Timeless block
+            "0 10 Timeless X @Errands".to_string(),
+            "2024-03-14 09:00".to_string(), // Timed block for the same day
+            "1 30 Timed Y @Project".to_string(),     // Ends 10:30
+        ];
+        let config = Config::default();
+        let life_lapses = parse_activities(lines.iter(), &config);
+
+        assert_eq!(life_lapses.len(), 2, "Should produce two LifeLapses");
+
+        // First LifeLapse (Timeless)
+        let lapse1 = &life_lapses[0];
+        let expected_start_timeless = Local.ymd(2024, 3, 14).and_hms(0, 0, 0);
+        assert_eq!(lapse1.start(), expected_start_timeless);
+        assert_eq!(lapse1.tokens_as_ref().len(), 1);
+        assert_eq!(lapse1.tokens_as_ref()[0].start, expected_start_timeless);
+        assert_eq!(lapse1.tokens_as_ref()[0].life_chunk.duration, Duration::minutes(10));
+        assert_eq!(lapse1.end, expected_start_timeless + Duration::minutes(10));
+
+        // Second LifeLapse (Timed)
+        let lapse2 = &life_lapses[1];
+        let expected_start_timed = Local.ymd(2024, 3, 14).and_hms(9, 0, 0);
+        assert_eq!(lapse2.start(), expected_start_timed);
+        assert_eq!(lapse2.tokens_as_ref().len(), 1);
+        assert_eq!(lapse2.tokens_as_ref()[0].start, expected_start_timed);
+        assert_eq!(lapse2.tokens_as_ref()[0].life_chunk.duration, Duration::hours(1) + Duration::minutes(30));
+        assert_eq!(lapse2.end, expected_start_timed + Duration::hours(1) + Duration::minutes(30));
+    }
+
+    #[test]
+    fn test_parse_activities_only_header() {
+        let lines = vec!["2024-03-15".to_string()];
+        let config = Config::default();
+        let life_lapses = parse_activities(lines.iter(), &config);
+
+        assert_eq!(life_lapses.len(), 1, "Should produce one LifeLapse even with only a header");
+        let lapse = &life_lapses[0];
+        let expected_start_time = Local.ymd(2024, 3, 15).and_hms(0, 0, 0);
+        assert_eq!(lapse.start(), expected_start_time, "LifeLapse start time should be midnight");
+        assert!(lapse.tokens_as_ref().is_empty(), "LifeLapse should have no tokens");
+        assert_eq!(lapse.total_duration(), Duration::zero(), "LifeLapse total duration should be zero");
+        assert_eq!(lapse.end, expected_start_time, "LifeLapse end time should be same as start");
     }
 }
 
@@ -260,7 +426,7 @@ pub struct TimedLifeChunk {
 #[derive(Clone)]
 pub enum LineParseResult {
     Lc { life_chunk: LifeChunk },
-    Date { date: Timestamp },
+    Date { date: Timestamp, is_date_only: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -308,38 +474,67 @@ pub fn get_all_life_lapses(
 }
 
 pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse> {
-    let list_of_pr = parse_all_lines(&mut it);
+    let list_of_pr_initial = parse_all_lines(&mut it);
 
-    let start_time = if let Some(Date { date }) = list_of_pr.first() {
+    if list_of_pr_initial.is_empty() {
+        return vec![];
+    }
+
+    // Process categories based on initial parse results
+    let mut parse_state = register_all_categories(&list_of_pr_initial);
+    update_parse_state_from_config(config, &mut parse_state).expect("");
+    let list_of_pr = parse_state.update_category_quadrants(list_of_pr_initial);
+
+    // After potential modifications by update_category_quadrants,
+    // it's theoretically possible list_of_pr is empty if all items were somehow removed.
+    // Though current logic of update_category_quadrants doesn't remove items.
+    if list_of_pr.is_empty() {
+        return vec![];
+    }
+
+    // The first element of list_of_pr (which is non-empty here) must be a Date variant,
+    // as ensured by parse_all_lines. This date is the effective start_time for tokenization.
+    let first_date_in_lpr = if let Some(Date { date, .. }) = list_of_pr.first() {
         *date
     } else {
-        assert!(list_of_pr.is_empty());
-        return vec![];
+        // This path should not be taken given the guarantees from parse_all_lines
+        // and the non-empty check for list_of_pr.
+        unreachable!("list_of_pr is non-empty and should start with a Date.");
     };
 
-    let mut parse_state = register_all_categories(&list_of_pr);
+    let tiro_tokens = tokens_from_timed_lpr(list_of_pr, first_date_in_lpr);
 
-    update_parse_state_from_config(config, &mut parse_state).expect("");
+    // If tiro_tokens is empty, it implies list_of_pr_updated was empty,
+    // which should have been caught by the initial list_of_pr.is_empty() check.
+    // Or, if tokens_from_timed_lpr could return empty for non-empty input (it shouldn't).
+    if tiro_tokens.is_empty() {
+        return vec![];
+    }
 
-    let list_of_pr = parse_state.update_category_quadrants(list_of_pr);
-
-    let tiro_tokens = tokens_from_timed_lpr(list_of_pr, start_time);
-
-    // XXX: shouldn't have particular case, everything in the loop. Have current_ll as Option?
     let mut result = vec![];
-    let mut current_ll = LifeLapse::new(start_time);
-    for tok in tiro_tokens {
+    // Initialize current_ll with the date from the *first* TiroToken::Date.
+    // We know tiro_tokens is not empty and should start with a Date token.
+    let mut current_ll = if let Some(TiroToken::Date { date }) = tiro_tokens.first() {
+        LifeLapse::new(*date)
+    } else {
+        // This indicates a logic error in tokens_from_timed_lpr or assumptions about its output.
+        unreachable!("tiro_tokens is non-empty and expected to start with a Date token");
+    };
+
+    // Skip the first token as its Date was used to initialize current_ll.
+    // Iterate over the rest of the tokens.
+    for tok in tiro_tokens.into_iter().skip(1) {
         match tok {
             TiroToken::Tlc { tlc } => {
                 current_ll.push(tlc);
             }
             TiroToken::Date { date } => {
-                result.push(current_ll);
-                current_ll = LifeLapse::new(date);
+                result.push(current_ll); // Push the completed LifeLapse
+                current_ll = LifeLapse::new(date); // Start a new one for the new date
             }
         }
     }
-    result.push(current_ll);
+    result.push(current_ll); // Push the last LifeLapse (could be the first one if only one Date token)
 
     result
 }
@@ -397,19 +592,32 @@ fn parse_category(token: &str) -> Option<MetaCategory> {
     }
 }
 
-fn parse_date(s: &str) -> Option<Timestamp> {
-    let def = || s.parse::<Timestamp>();
-    let generic_fmt = |fmt| Local.datetime_from_str(s, fmt);
-
-    let formats = vec!["%Y-%m-%d %H:%M", "%Y-%m-%d %Hh%M"];
-
-    let mut results = vec![def()];
-
-    for fmt in formats {
-        results.push(generic_fmt(fmt));
+fn parse_date(s: &str) -> Option<(Timestamp, bool)> {
+    // Attempt to parse full date-time formats first
+    let datetime_formats = vec!["%Y-%m-%d %H:%M", "%Y-%m-%d %Hh%M"];
+    for fmt in datetime_formats {
+        if let Ok(dt) = Local.datetime_from_str(s, fmt) {
+            return Some((dt, false));
+        }
     }
 
-    results.iter().find_map(|r| r.ok())
+    // Attempt to parse s as Timestamp (RFC 3339 / ISO 8601)
+    if let Ok(dt) = s.parse::<Timestamp>() {
+        return Some((dt, false));
+    }
+
+    // Attempt to parse date-only format
+    if let Ok(naive_date) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        // Convert NaiveDate to NaiveDateTime at midnight, then to local Timestamp
+        let naive_datetime = naive_date.and_hms_opt(0, 0, 0).unwrap(); // Midnight
+        match Local.from_local_datetime(&naive_datetime) {
+            LocalResult::Single(dt) => return Some((dt, true)),
+            LocalResult::Ambiguous(dt1, _) => return Some((dt1, true)), // Or handle ambiguity as needed
+            LocalResult::None => return None,                           // Invalid local time
+        }
+    }
+
+    None
 }
 
 pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
@@ -478,10 +686,13 @@ fn parse_all_lines(it: &mut Iter<String>) -> Vec<LineParseResult> {
         }
         match process_line(s) {
             // TODO: shouldn't unwrap
-            Date { date } => list_of_pr.push(Date { date }),
-            lp => {
+            // Date { date } => list_of_pr.push(Date { date }),
+            // The above line is problematic because we don't know the value of is_date_only here.
+            // process_line directly returns the correct LineParseResult variant including is_date_only.
+            date_result @ Date { .. } => list_of_pr.push(date_result),
+            lc_result @ Lc { .. } => {
                 if !list_of_pr.is_empty() {
-                    list_of_pr.push(lp)
+                    list_of_pr.push(lc_result)
                 }
             }
         }
@@ -504,24 +715,48 @@ fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
 
 fn tokens_from_timed_lpr(
     list_of_pr: Vec<LineParseResult>,
-    start_time: Timestamp,
+    start_time: Timestamp, // This is the timestamp from the very first Date line in the file/input.
 ) -> Vec<TiroToken> {
     let mut tiro_tokens = vec![];
-    let mut curr_time = start_time;
+    let mut curr_time = start_time; // Represents the current time anchor for activities.
+                                    // For timed activities, it's the end of the previous activity.
+                                    // For timeless activities, it's the start of the day (midnight of the header date).
+
+    // Determine initial state of current_block_is_timeless based on the first item, if it's a Date.
+    // This assumes list_of_pr is not empty and starts with a Date, which parse_activities ensures.
+    let mut current_block_is_timeless = if let Some(Date { is_date_only, .. }) = list_of_pr.first() {
+        *is_date_only
+    } else {
+        // This case should ideally not be hit if parse_activities ensures the first element is Date.
+        // If it can be hit, default to false or handle error.
+        false
+    };
+
     for lpr in list_of_pr {
         match lpr {
             Lc { life_chunk } => {
-                let duration = life_chunk.duration;
+                let activity_start_time = curr_time; // Start time for this specific LC
+
                 let tlc = TimedLifeChunk {
-                    start: curr_time,
+                    start: activity_start_time,
                     life_chunk,
                 };
-                curr_time = curr_time + duration;
-                tiro_tokens.push(TiroToken::Tlc { tlc })
+                let duration = tlc.life_chunk.duration; // Get duration before move
+                tiro_tokens.push(TiroToken::Tlc { tlc });
+
+                // Only advance curr_time if this block of activities is NOT timeless.
+                // If timeless, all activities in this block get the same start time (midnight of header),
+                // and their durations do not shift the start of the next one in this block.
+                if !current_block_is_timeless {
+                    curr_time = activity_start_time + duration; // Use stored duration
+                }
+                // If current_block_is_timeless, curr_time remains the same (e.g., midnight of the header date)
+                // for the next LC in this timeless block.
             }
-            Date { date } => {
-                curr_time = date;
-                tiro_tokens.push(TiroToken::Date { date })
+            Date { date, is_date_only } => {
+                curr_time = date; // New anchor time
+                current_block_is_timeless = is_date_only; // Update mode for subsequent Lcs
+                tiro_tokens.push(TiroToken::Date { date });
             }
         };
     }
@@ -531,9 +766,15 @@ fn tokens_from_timed_lpr(
 
 /// Parse a line from the input
 fn process_line(line: &str) -> LineParseResult {
-    parse_date(line).map(|date| Date { date }).unwrap_or(Lc {
-        life_chunk: get_life_chunk(line),
-    })
+    match parse_date(line) {
+        Some((timestamp, is_date_only_flag)) => LineParseResult::Date {
+            date: timestamp,
+            is_date_only: is_date_only_flag,
+        },
+        None => LineParseResult::Lc {
+            life_chunk: get_life_chunk(line),
+        },
+    }
 }
 
 fn is_noop(line: &str) -> bool {
@@ -542,6 +783,6 @@ fn is_noop(line: &str) -> bool {
 
 /// Whether a token is a date
 fn is_a_date_token(t: &LineParseResult) -> bool {
-    let d = Date { date: Local::now() };
+    let d = Date { date: Local::now(), is_date_only: false }; // Value of is_date_only doesn't affect discriminant
     discriminant(t) == discriminant(&d)
 }

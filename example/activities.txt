@@ -11,3 +11,13 @@
 5 0 @sleep
 0 10 @calls @1
 
+# Example of timeless activities
+2022-08-15
+0 45 Morning email check @work
+1 30 Project planning @work @projectX
+0 20 Quick break @misc
+
+2022-08-15 14:00
+# Followed by timed activities on the same day
+2 0 Focused work session @work @projectX
+1 0 Meeting @work @team
