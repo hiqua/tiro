@@ -9,8 +9,9 @@ use chrono::Datelike;
 use colored::control::{set_override, unset_override};
 use colored::Color;
 use colored::*;
-
+use chrono::Duration as ChronoDuration; // Added for gap calculation
 use crate::config::Quadrant;
+use time; // Added for tests
 use crate::config::Quadrant::*;
 use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
 use crate::summary::Timestamp;
@@ -61,10 +62,39 @@ pub fn get_output_writer(
 
 pub fn format_lifelapses(lifelapses: &[LifeLapse]) -> Vec<String> {
     let mut lines = vec![];
+    let mut previous_end_time: Option<Timestamp> = None;
+
     for ll in lifelapses {
+        if let Some(prev_end) = previous_end_time {
+            let gap = ll.start().signed_duration_since(prev_end);
+            if gap > ChronoDuration::zero() {
+                lines.push(format_gap_duration(gap));
+            }
+        }
         lines.extend(format_list_of_chunks(ll.start(), ll.tokens_as_ref()));
+        previous_end_time = Some(ll.end());
     }
     lines
+}
+
+fn format_gap_duration(duration: ChronoDuration) -> String {
+    let hours = duration.num_hours();
+    let minutes = duration.num_minutes() % 60;
+
+    let mut parts = Vec::new();
+    if hours > 0 {
+        parts.push(format!("{} hour{}", hours, if hours == 1 { "" } else { "s" }));
+    }
+    if minutes > 0 {
+        parts.push(format!("{} minute{}", minutes, if minutes == 1 { "" } else { "s" }));
+    }
+
+    if parts.is_empty() {
+        // This case should ideally not be reached if we only call for gaps > 0
+        return String::from("Minimal gap");
+    }
+
+    format!("--- Gap of {} ---", parts.join(" ")).italic().to_string()
 }
 
 /// Need this producer because the coloring won't be flexible otherwise
@@ -155,4 +185,157 @@ fn color_line(s: String, q: Quadrant) -> String {
 
 fn get_warning_overlapping() -> String {
     "\n/!\\ Overlapping activities /!\\\n".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse::{LifeLapse, LifeChunk, TimedLifeChunk, get_life_chunk}; // Added LifeChunk, TimedLifeChunk, get_life_chunk
+    use crate::config::Quadrant; // Added for minimal_life_chunk
+    use chrono::{Local, TimeZone, Duration as ChronoDuration};
+    use time; // Already added, but ensure it's here for LifeChunk's duration
+
+    #[test]
+    fn test_format_gap_duration_hours_and_minutes() {
+        let duration = ChronoDuration::hours(2) + ChronoDuration::minutes(30);
+        // The .italic().to_string() adds ANSI codes if not overridden
+        set_override(false); // Ensure no ANSI codes for string comparison
+        assert_eq!(format_gap_duration(duration), "--- Gap of 2 hours 30 minutes ---");
+        unset_override();
+    }
+
+    #[test]
+    fn test_format_gap_duration_only_hours() {
+        let duration = ChronoDuration::hours(5);
+        set_override(false);
+        assert_eq!(format_gap_duration(duration), "--- Gap of 5 hours ---");
+        unset_override();
+    }
+
+    #[test]
+    fn test_format_gap_duration_only_minutes() {
+        let duration = ChronoDuration::minutes(45);
+        set_override(false);
+        assert_eq!(format_gap_duration(duration), "--- Gap of 45 minutes ---");
+        unset_override();
+    }
+
+    #[test]
+    fn test_format_gap_duration_one_hour_one_minute() {
+        let duration = ChronoDuration::hours(1) + ChronoDuration::minutes(1);
+        set_override(false);
+        assert_eq!(format_gap_duration(duration), "--- Gap of 1 hour 1 minute ---");
+        unset_override();
+    }
+
+    // Tests for format_lifelapses
+    // For these tests, we need to construct LifeLapse instances.
+    // LifeLapse::new(start) initializes `end` to `start`.
+    // LifeLapse::push(TimedLifeChunk) updates `end`.
+    // LifeLapse::start() and LifeLapse::end() are public.
+
+    // Minimal LifeChunk for testing purposes.
+    fn minimal_life_chunk(duration_hours: i64, duration_minutes: i64) -> LifeChunk {
+        // Construct a line that get_life_chunk can parse to create a LifeChunk
+        // with the desired duration.
+        // Format: "H M Description"
+        // We only care about duration for these tests, description/categories can be minimal.
+        let line = format!("{} {} test_activity", duration_hours, duration_minutes);
+        get_life_chunk(&line)
+    }
+
+    // Helper to create a LifeLapse with a specific start and duration
+    fn create_lapse(start_datetime: Timestamp, duration_seconds: i64) -> LifeLapse {
+        let mut lapse = LifeLapse::new(start_datetime);
+        if duration_seconds > 0 {
+            let hours = duration_seconds / 3600;
+            let minutes = (duration_seconds % 3600) / 60;
+            let chunk = minimal_life_chunk(hours, minutes);
+            let timed_chunk = TimedLifeChunk { start: start_datetime, life_chunk: chunk };
+            // This is not how LifeLapse::push works, it doesn't take TimedLifeChunk directly in some versions.
+            // It takes LifeChunk and internally creates TimedLifeChunk.
+            // Let's assume LifeLapse has a method to add a duration or a simple chunk.
+            // The actual `push` method in `parse.rs` for `LifeLapse` is private.
+            // We'll use the public `extend` method instead.
+            lapse.extend(std::iter::once(timed_chunk));
+        }
+        lapse
+    }
+
+    #[test]
+    fn test_format_lifelapses_no_lapses() {
+        let lapses = vec![];
+        assert_eq!(format_lifelapses(&lapses).len(), 0);
+    }
+
+    #[test]
+    fn test_format_lifelapses_single_lapse() {
+        // Colored output makes direct string comparison tricky.
+        // We are interested in whether gap lines are added or not.
+        // format_list_of_chunks adds lines for the lapse itself.
+        set_override(false); // Disable color for consistent output
+        let start_time = Local.ymd(2024, 1, 1).and_hms_opt(10, 0, 0).unwrap();
+        let lapses = vec![create_lapse(start_time, 3600)]; // 1 hour duration
+        let formatted_lines = format_lifelapses(&lapses);
+        // Expect no gap lines, only lines from format_list_of_chunks
+        // format_list_of_chunks adds: header, one line per chunk (here 1), and a blank line.
+        // So, 3 lines for a single chunk lapse.
+        assert!(formatted_lines.len() > 0);
+        assert!(!formatted_lines.iter().any(|line| line.contains("--- Gap of")));
+        unset_override();
+    }
+
+    #[test]
+    fn test_format_lifelapses_with_gap() {
+        set_override(false);
+        let t1_start = Local.ymd(2024, 1, 1).and_hms_opt(10, 0, 0).unwrap();
+        let lapse1 = create_lapse(t1_start, 3600); // Ends at 11:00:00
+
+        let t2_start = Local.ymd(2024, 1, 1).and_hms_opt(12, 0, 0).unwrap(); // Starts 1 hour after lapse1 ends
+        let lapse2 = create_lapse(t2_start, 1800); // 30 mins duration
+
+        let lapses = vec![lapse1, lapse2];
+        let formatted_lines = format_lifelapses(&lapses);
+
+        assert!(formatted_lines.iter().any(|line| line == "--- Gap of 1 hour ---"));
+        unset_override();
+    }
+
+    #[test]
+    fn test_format_lifelapses_no_gap() {
+        set_override(false);
+        let t1_start = Local.ymd(2024, 1, 1).and_hms_opt(10, 0, 0).unwrap();
+        let lapse1 = create_lapse(t1_start, 3600); // Ends at 11:00:00
+
+        let t2_start = Local.ymd(2024, 1, 1).and_hms_opt(11, 0, 0).unwrap(); // Starts immediately after lapse1 ends
+        let lapse2 = create_lapse(t2_start, 1800);
+
+        let lapses = vec![lapse1, lapse2];
+        let formatted_lines = format_lifelapses(&lapses);
+
+        assert!(!formatted_lines.iter().any(|line| line.contains("--- Gap of")));
+        unset_override();
+    }
+
+    #[test]
+    fn test_format_lifelapses_overlapping_lapses_behavior() {
+        // Current implementation of gap calculation `ll.start().signed_duration_since(prev_end)`
+        // If `ll.start()` is before `prev_end`, the duration will be negative.
+        // The condition `if gap > ChronoDuration::zero()` means negative gaps are not printed.
+        set_override(false);
+        let t1_start = Local.ymd(2024, 1, 1).and_hms_opt(10, 0, 0).unwrap();
+        let lapse1 = create_lapse(t1_start, 7200); // Ends at 12:00:00
+
+        let t2_start = Local.ymd(2024, 1, 1).and_hms_opt(11, 0, 0).unwrap(); // Starts *before* lapse1 ends
+        let lapse2 = create_lapse(t2_start, 1800);
+
+        let lapses = vec![lapse1, lapse2];
+        let formatted_lines = format_lifelapses(&lapses);
+
+        // No "Gap of" line should be printed for negative/zero gaps.
+        // An "Overlapping activities" warning is printed by format_list_of_chunks if tokens overlap,
+        // but that's different from the gap between lapses.
+        assert!(!formatted_lines.iter().any(|line| line.contains("--- Gap of")));
+        unset_override();
+    }
 }
