@@ -27,8 +27,10 @@ mod tests {
     use chrono::{Local, TimeZone};
     use time::Duration;
 
-    use crate::config::Quadrant;
-    use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult};
+    use chrono::NaiveTime; // Added for new tests
+    use crate::config::{Config, Quadrant}; // Added Config
+    // Added LifeLapse, parse_activities for new tests
+    use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult, LifeLapse, parse_activities};
 
     #[test]
     fn parsing_1() {
@@ -74,12 +76,12 @@ mod tests {
     fn test_get_life_chunk_missing_duration() {
         let line = "그냥 프로젝트 작업 @Dev"; // "Just working on a project @Dev"
         let lc = get_life_chunk(line);
-        assert_eq!(lc.description, "작업"); // Adjusted for current behavior
+        assert_eq!(lc.description, "그냥 프로젝트 작업"); // Expect full line as description
         assert_eq!(lc.duration, Duration::zero());
         assert_eq!(lc.categories, vec!["@Dev".to_string()]);
         assert_eq!(lc.quadrant, Quadrant::default());
         assert!(!lc.user_provided_quadrant);
-        assert_eq!(lc.get_input(), "작업 @Dev"); // Adjusted for current behavior
+        assert_eq!(lc.get_input(), "그냥 프로젝트 작업 @Dev"); // Expect full non-prefix line as input part
     }
 
     #[test]
@@ -118,6 +120,89 @@ mod tests {
         assert_eq!(lc.get_input(), "Reading a book @Leisure");
     }
 
+    #[test]
+    fn test_get_life_chunk_end_time_basic() {
+        let line = ">17:00 Meeting @Work";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, "Meeting");
+        assert_eq!(lc.duration, Duration::zero());
+        assert!(lc.is_end_time_specified);
+        assert_eq!(lc.end_time, Some(NaiveTime::from_hms(17, 0, 0)));
+        assert_eq!(lc.categories, vec!["@Work".to_string()]);
+        assert_eq!(lc.get_input(), "Meeting @Work");
+    }
+
+    #[test]
+    fn test_get_life_chunk_end_time_with_category_first() {
+        let line = ">09:30 @MorningRoutine Breakfast";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, "Breakfast");
+        assert!(lc.is_end_time_specified);
+        assert_eq!(lc.end_time, Some(NaiveTime::from_hms(9, 30, 0)));
+        assert_eq!(lc.categories, vec!["@MorningRoutine".to_string()]);
+        assert_eq!(lc.get_input(), "@MorningRoutine Breakfast");
+    }
+
+    #[test]
+    fn test_get_life_chunk_end_time_no_description() {
+        let line = ">23:00 @Evening";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, "");
+        assert!(lc.is_end_time_specified);
+        assert_eq!(lc.end_time, Some(NaiveTime::from_hms(23, 0, 0)));
+        assert_eq!(lc.categories, vec!["@Evening".to_string()]);
+        assert_eq!(lc.get_input(), "@Evening");
+    }
+
+    #[test]
+    fn test_get_life_chunk_end_time_invalid_format() {
+        let line = ">1700 Meeting @Work";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, ">1700 Meeting");
+        assert!(!lc.is_end_time_specified);
+        assert_eq!(lc.end_time, None);
+        assert_eq!(lc.duration, Duration::zero());
+        assert_eq!(lc.categories, vec!["@Work".to_string()]);
+        assert_eq!(lc.get_input(), ">1700 Meeting @Work");
+    }
+
+    #[test]
+    fn test_get_life_chunk_end_time_just_arrow() {
+        let line = "> Meeting @Work";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, "> Meeting");
+        assert!(!lc.is_end_time_specified);
+        assert_eq!(lc.end_time, None);
+        assert_eq!(lc.duration, Duration::zero());
+        assert_eq!(lc.categories, vec!["@Work".to_string()]);
+        assert_eq!(lc.get_input(), "> Meeting @Work");
+    }
+
+    #[test]
+    fn test_get_life_chunk_standard_duration_still_works() { // Renamed for clarity
+        let line = "1 15 Coding @Dev";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, "Coding");
+        assert_eq!(lc.duration, Duration::hours(1) + Duration::minutes(15));
+        assert!(!lc.is_end_time_specified);
+        assert_eq!(lc.end_time, None);
+        assert_eq!(lc.categories, vec!["@Dev".to_string()]);
+        assert_eq!(lc.get_input(), "Coding @Dev");
+    }
+
+    #[test]
+    fn test_get_life_chunk_only_description_no_time_spec() { // Renamed for clarity
+        let line = "Simple task";
+        let lc = get_life_chunk(line);
+        assert_eq!(lc.description, "Simple task");
+        assert_eq!(lc.duration, Duration::zero());
+        assert!(!lc.is_end_time_specified);
+        assert_eq!(lc.end_time, None);
+        assert_eq!(lc.categories, Vec::<String>::new());
+        assert_eq!(lc.get_input(), "Simple task");
+    }
+
+
     // Tests for process_line
     #[test]
     fn test_process_line_date() {
@@ -150,14 +235,14 @@ mod tests {
         let line = "# This is a comment";
         match process_line(line) {
             LineParseResult::Lc { life_chunk: lc } => {
-                // Based on get_life_chunk behavior:
-                // "#" is consumed by h_duration attempt, "This" by m_duration attempt
-                assert_eq!(lc.description, "is a comment");
+                // If a comment line is fed directly to process_line (bypassing is_noop from parse_all_lines),
+                // get_life_chunk will treat '#' as part of the description if not parsed as duration/time.
+                assert_eq!(lc.description, "# This is a comment");
                 assert_eq!(lc.duration, Duration::zero());
                 assert_eq!(lc.categories, Vec::<String>::new());
                 assert_eq!(lc.quadrant, Quadrant::default());
                 assert!(!lc.user_provided_quadrant);
-                assert_eq!(lc.get_input(), "is a comment");
+                assert_eq!(lc.get_input(), "# This is a comment");
             }
             _ => panic!("Expected LineParseResult::Lc for a comment line"),
         }
@@ -178,6 +263,114 @@ mod tests {
             _ => panic!("Expected LineParseResult::Lc for an empty line"),
         }
     }
+
+    // Helper function for testing parse_activities
+    fn run_parse_activities_test(lines: Vec<String>, config: &Config) -> Vec<LifeLapse> {
+        parse_activities(lines.iter(), config)
+    }
+
+    #[test]
+    fn test_duration_calculation_same_day() {
+        let config = Config::default();
+        let lines = vec![
+            "2024-03-10 10:00".to_string(),
+            "1 0 Activity 1".to_string(),      // Ends at 11:00
+            ">12:30 Activity 2".to_string(), // Should be 1h 30m
+        ];
+        let lapses = run_parse_activities_test(lines, &config);
+        assert_eq!(lapses.len(), 1);
+        let tokens = lapses[0].tokens_as_ref();
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[1].life_chunk.duration, Duration::hours(1) + Duration::minutes(30));
+        assert_eq!(tokens[1].start, Local.ymd(2024, 3, 10).and_hms(11, 0, 0));
+    }
+
+    #[test]
+    fn test_duration_calculation_overnight() {
+        let config = Config::default();
+        let lines = vec![
+            "2024-03-10 23:00".to_string(), // Start late
+            "1 0 Activity 1".to_string(),      // Ends at 2024-03-11 00:00
+            ">02:30 Activity 2".to_string(), // Should be 2h 30m, ends at 2024-03-11 02:30
+        ];
+        let lapses = run_parse_activities_test(lines, &config);
+        assert_eq!(lapses.len(), 1);
+        let tokens = lapses[0].tokens_as_ref();
+        assert_eq!(tokens.len(), 2);
+        let activity2_start_expected = Local.ymd(2024, 3, 11).and_hms(0, 0, 0);
+        assert_eq!(tokens[1].start, activity2_start_expected);
+        assert_eq!(tokens[1].life_chunk.duration, Duration::hours(2) + Duration::minutes(30));
+    }
+
+    #[test]
+    fn test_duration_calculation_activity_ends_at_midnight() {
+        let config = Config::default();
+        let lines = vec![
+            "2024-03-10 22:30".to_string(),
+            ">00:00 Activity 1".to_string(), // Ends at midnight, duration 1h 30m
+        ];
+        let lapses = run_parse_activities_test(lines, &config);
+        assert_eq!(lapses.len(), 1);
+        let tokens = lapses[0].tokens_as_ref();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].life_chunk.duration, Duration::hours(1) + Duration::minutes(30));
+        assert_eq!(tokens[0].start, Local.ymd(2024, 3, 10).and_hms(22, 30, 0));
+    }
+
+    #[test]
+    fn test_mixed_duration_and_endtime_inputs() {
+        let config = Config::default();
+        let lines = vec![
+            "2024-07-01 09:00".to_string(),
+            "0 30 Meeting 1".to_string(),    // Ends 09:30
+            ">11:00 Project Work".to_string(), // Ends 11:00, duration 1h 30m
+            "1 0 Lunch".to_string(),         // Ends 12:00, duration 1h
+            ">12:15 Quick Sync".to_string(),  // Ends 12:15, duration 15m
+        ];
+        let lapses = run_parse_activities_test(lines, &config);
+        assert_eq!(lapses.len(), 1);
+        let tokens = lapses[0].tokens_as_ref();
+        assert_eq!(tokens.len(), 4);
+
+        assert_eq!(tokens[0].life_chunk.description, "Meeting 1");
+        assert_eq!(tokens[0].life_chunk.duration, Duration::minutes(30));
+        assert_eq!(tokens[0].start, Local.ymd(2024, 7, 1).and_hms(9, 0, 0));
+
+        assert_eq!(tokens[1].life_chunk.description, "Project Work");
+        assert_eq!(tokens[1].life_chunk.duration, Duration::hours(1) + Duration::minutes(30));
+        assert_eq!(tokens[1].start, Local.ymd(2024, 7, 1).and_hms(9, 30, 0));
+
+        assert_eq!(tokens[2].life_chunk.description, "Lunch");
+        assert_eq!(tokens[2].life_chunk.duration, Duration::hours(1));
+        assert_eq!(tokens[2].start, Local.ymd(2024, 7, 1).and_hms(11, 0, 0));
+
+        assert_eq!(tokens[3].life_chunk.description, "Quick Sync");
+        assert_eq!(tokens[3].life_chunk.duration, Duration::minutes(15));
+        assert_eq!(tokens[3].start, Local.ymd(2024, 7, 1).and_hms(12, 0, 0));
+    }
+
+    #[test]
+    fn test_successive_endtime_inputs() {
+        let config = Config::default();
+        let lines = vec![
+            "2024-07-01 14:00".to_string(),
+            ">14:45 Task A".to_string(),    // Ends 14:45, duration 45m
+            ">15:15 Task B".to_string(),    // Ends 15:15, duration 30m
+        ];
+        let lapses = run_parse_activities_test(lines, &config);
+        assert_eq!(lapses.len(), 1);
+        let tokens = lapses[0].tokens_as_ref();
+        assert_eq!(tokens.len(), 2);
+
+        assert_eq!(tokens[0].life_chunk.description, "Task A");
+        assert_eq!(tokens[0].life_chunk.duration, Duration::minutes(45));
+        assert_eq!(tokens[0].start, Local.ymd(2024, 7, 1).and_hms(14, 0, 0));
+
+        assert_eq!(tokens[1].life_chunk.description, "Task B");
+        assert_eq!(tokens[1].life_chunk.duration, Duration::minutes(30));
+        assert_eq!(tokens[1].start, Local.ymd(2024, 7, 1).and_hms(14, 45, 0));
+    }
+
 }
 
 /// A continuous series of life chunks.
@@ -257,6 +450,8 @@ pub enum LineParseResult {
     Date { date: Timestamp },
 }
 
+use chrono::NaiveTime; // Ensure NaiveTime is imported
+
 #[derive(Clone, Debug)]
 pub struct LifeChunk {
     pub description: String,
@@ -265,6 +460,8 @@ pub struct LifeChunk {
     pub quadrant: Quadrant,
     pub user_provided_quadrant: bool,
     input: String,
+    pub end_time: Option<NaiveTime>, // Added
+    pub is_end_time_specified: bool, // Added
 }
 
 impl LifeChunk {
@@ -319,21 +516,40 @@ pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse>
 
     let tiro_tokens = tokens_from_timed_lpr(list_of_pr, start_time);
 
-    // XXX: shouldn't have particular case, everything in the loop. Have current_ll as Option?
     let mut result = vec![];
-    let mut current_ll = LifeLapse::new(start_time);
+    let mut current_ll = LifeLapse::new(start_time); // Initialized with the definite start time.
+    let mut first_date_token_processed = false;
+
+    // The first token in tiro_tokens should always be a Date token corresponding to start_time
+    // if list_of_pr was not empty and started with a Date.
+
     for tok in tiro_tokens {
         match tok {
             TiroToken::Tlc { tlc } => {
                 current_ll.push(tlc);
             }
             TiroToken::Date { date } => {
-                result.push(current_ll);
-                current_ll = LifeLapse::new(date);
+                if !first_date_token_processed {
+                    // This is the first Date token, it usually matches the initial start_time.
+                    // Re-initialize current_ll to ensure it's clean and uses this specific date object.
+                    current_ll = LifeLapse::new(date);
+                    first_date_token_processed = true;
+                } else {
+                    // This is a subsequent Date token, indicating a new day or explicit time set.
+                    // The previous LifeLapse is complete.
+                    if !current_ll.is_empty() { // Avoid pushing empty lapses
+                        result.push(current_ll);
+                    }
+                    current_ll = LifeLapse::new(date);
+                }
             }
         }
     }
-    result.push(current_ll);
+
+    // Push the last LifeLapse if it contains any tokens.
+    if !current_ll.is_empty() {
+        result.push(current_ll);
+    }
 
     result
 }
@@ -399,30 +615,67 @@ fn parse_date(s: &str) -> Option<Timestamp> {
 
 pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     // Made pub(crate)
-    let mut tokens = line.split(|c: char| c == ',' || c.is_whitespace());
+    let tokens_iter = line.split(|c: char| c == ',' || c.is_whitespace()); // Removed mut
+    // Filter out empty strings that can result from multiple spaces
+    let tokens: Vec<&str> = tokens_iter.filter(|s| !s.is_empty()).collect();
 
-    let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
-        tokens
-            .next()
-            .and_then(|i| i.parse::<i64>().ok())
-            .map(parse_as)
-            .unwrap_or_else(Duration::zero)
+    let mut duration = Duration::zero();
+    let mut end_time: Option<NaiveTime> = None;
+    let mut is_end_time_specified = false;
+    let mut description_offset = 0;
+
+    if !tokens.is_empty() {
+        let first_token = tokens[0];
+        if first_token.starts_with('>') {
+            if first_token.len() > 1 {
+                let time_str = &first_token[1..];
+                if let Ok(parsed_time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
+                    end_time = Some(parsed_time);
+                    is_end_time_specified = true;
+                    description_offset = 1;
+                }
+            }
+        } else {
+            let mut h_opt: Option<i64> = None;
+            let mut m_opt: Option<i64> = None;
+            let mut current_offset_for_duration = 0;
+
+            if let Some(token_val_h) = tokens.get(0) {
+                if let Ok(h_val) = token_val_h.parse::<i64>() {
+                    h_opt = Some(h_val);
+                    current_offset_for_duration += 1;
+                    if let Some(token_val_m) = tokens.get(1) {
+                        if let Ok(m_val) = token_val_m.parse::<i64>() {
+                            m_opt = Some(m_val);
+                            current_offset_for_duration += 1;
+                        }
+                    }
+                }
+            }
+
+            if h_opt.is_some() || m_opt.is_some() {
+                 duration = Duration::hours(h_opt.unwrap_or(0)) + Duration::minutes(m_opt.unwrap_or(0));
+                 description_offset = current_offset_for_duration;
+            }
+        }
+    }
+
+    let remaining_tokens = if tokens.len() >= description_offset {
+        &tokens[description_offset..]
+    } else {
+        &[]
     };
-    let h = parse_token_as_duration(Duration::hours);
-    let m = parse_token_as_duration(Duration::minutes);
-
-    let duration = h + m;
 
     let mut newline: Vec<&str> = vec![];
     let mut categories: Vec<String> = vec![];
 
     let mut quadrant = None;
 
-    let mut to_join = vec![];
+    let mut to_join = vec![]; // This will be for the 'input' field
     // XXX: should check compatibility of quadrants, in case there are several options
-    for t in tokens {
-        to_join.push(t);
-        if let Some(mc) = parse_category(t) {
+    for &t in remaining_tokens { // Iterate by reference, t is &str
+        to_join.push(t); // t is &str
+        if let Some(mc) = parse_category(t) { // t is &str
             match mc {
                 Quad { quadrant: q } => {
                     quadrant = Some(q);
@@ -444,12 +697,13 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     let qu = quadrant.or_else(|| Some(Default::default())).unwrap();
     LifeChunk {
         description,
-        duration,
+        duration, // This is the parsed H M duration, or Duration::zero() if >HH:MM was parsed
         categories,
-        // XXX: redundant default
         quadrant: qu,
         user_provided_quadrant: quadrant.is_some(),
         input: to_join.join(" "),
+        end_time, // Use the local variable `end_time`
+        is_end_time_specified, // Use the local variable `is_end_time_specified`
     }
 }
 
@@ -495,13 +749,39 @@ fn tokens_from_timed_lpr(
     let mut curr_time = start_time;
     for lpr in list_of_pr {
         match lpr {
-            Lc { life_chunk } => {
-                let duration = life_chunk.duration;
+            Lc { mut life_chunk } => {
+                let actual_duration = if life_chunk.is_end_time_specified {
+                    if let Some(end_naive_time) = life_chunk.end_time {
+                        let start_naive_time = curr_time.time();
+                        let duration_std = if end_naive_time >= start_naive_time {
+                            end_naive_time.signed_duration_since(start_naive_time)
+                        } else {
+                            let end_datetime_on_current_date = curr_time.date().and_time(end_naive_time);
+                            match end_datetime_on_current_date {
+                                Some(edt_today) => {
+                                    let end_datetime_tomorrow = edt_today + chrono::Duration::days(1);
+                                    end_datetime_tomorrow.signed_duration_since(curr_time)
+                                }
+                                None => {
+                                    chrono::Duration::zero()
+                                }
+                            }
+                        };
+                        Duration::seconds(duration_std.num_seconds())
+                    } else {
+                        life_chunk.duration
+                    }
+                } else {
+                    life_chunk.duration
+                };
+
+                life_chunk.duration = actual_duration;
+
                 let tlc = TimedLifeChunk {
                     start: curr_time,
                     life_chunk,
                 };
-                curr_time = curr_time + duration;
+                curr_time = curr_time + actual_duration;
                 tiro_tokens.push(TiroToken::Tlc { tlc })
             }
             Date { date } => {
