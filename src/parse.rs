@@ -255,7 +255,7 @@ mod tests {
             panic!("Expected LifeChunk for planning task");
         }
         if let LineParseResult::Date { date } = &result[2] {
-            assert_eq!(*date, Local.ymd(2024, 3, 10).and_hms(12,0,0));
+            assert_eq!(*date, Local.ymd(2024, 3, 10).and_hms(12, 0, 0));
         } else {
             panic!("Expected Date token");
         }
@@ -286,7 +286,10 @@ mod tests {
             assert_eq!(lc.description, "Research\nFirst part of research notes.");
             assert_eq!(lc.duration, Duration::hours(2));
             assert_eq!(lc.categories, vec!["@ProjectX".to_string()]);
-            assert_eq!(lc.input, "Research @ProjectX\nFirst part of research notes.");
+            assert_eq!(
+                lc.input,
+                "Research @ProjectX\nFirst part of research notes."
+            );
         } else {
             panic!("Expected LifeChunk for research task (LC1)");
         }
@@ -294,11 +297,11 @@ mod tests {
         // LC2: "Second part of research notes, after comment."
         // "Second" and "part" are consumed by get_life_chunk's duration parsing attempts.
         if let LineParseResult::Lc { life_chunk: lc } = &result[2] {
-             assert_eq!(lc.description, "of research notes, after comment.");
-             assert_eq!(lc.duration, Duration::zero());
-             assert_eq!(lc.categories, Vec::<String>::new());
-             // The input string for LC2 should be the original line content for that specific activity start line
-             assert_eq!(lc.input, "Second part of research notes, after comment.");
+            assert_eq!(lc.description, "of research notes, after comment.");
+            assert_eq!(lc.duration, Duration::zero());
+            assert_eq!(lc.categories, Vec::<String>::new());
+            // The input string for LC2 should be the original line content for that specific activity start line
+            assert_eq!(lc.input, "Second part of research notes, after comment.");
         } else {
             panic!("Expected LifeChunk for 'Second part...' (LC2)");
         }
@@ -313,7 +316,6 @@ mod tests {
             panic!("Expected LifeChunk for 'Review' task (LC3)");
         }
     }
-
 
     #[test]
     fn test_parse_all_lines_multiline_at_eof() {
@@ -353,14 +355,14 @@ mod tests {
         }
         if let LineParseResult::Lc { life_chunk: lc } = &result[2] {
             assert_eq!(lc.description, "Sub-task"); // get_life_chunk will parse "  0 30 Sub-task @ProjectY"
-                                                   // The leading spaces in "  0 30" mean parse_token_as_duration will fail for hours.
-                                                   // Then it will try to parse "0" as minutes, then "30" as description part.
-                                                   // This highlights how get_life_chunk parses.
-                                                   // Correct parsing of "  0 30 Sub-task" by get_life_chunk would require it to trim tokens.
-                                                   // For this test, we focus on parse_all_lines not merging.
-                                                   // The actual content of lc.description for the second LC depends on get_life_chunk's behavior with leading spaces.
-                                                   // Given current get_life_chunk: "0" and "30" are consumed by duration parsing (as 0 hours, 0 minutes because of space)
-                                                   // So description becomes "Sub-task"
+                                                    // The leading spaces in "  0 30" mean parse_token_as_duration will fail for hours.
+                                                    // Then it will try to parse "0" as minutes, then "30" as description part.
+                                                    // This highlights how get_life_chunk parses.
+                                                    // Correct parsing of "  0 30 Sub-task" by get_life_chunk would require it to trim tokens.
+                                                    // For this test, we focus on parse_all_lines not merging.
+                                                    // The actual content of lc.description for the second LC depends on get_life_chunk's behavior with leading spaces.
+                                                    // Given current get_life_chunk: "0" and "30" are consumed by duration parsing (as 0 hours, 0 minutes because of space)
+                                                    // So description becomes "Sub-task"
             assert_eq!(lc.description, "Sub-task");
             assert_eq!(lc.categories, vec!["@ProjectY".to_string()]);
             // Duration parsing needs to be robust to leading spaces in number tokens for this to be 30 mins.
@@ -403,7 +405,6 @@ mod tests {
             panic!("Expected LifeChunk for the text after empty line");
         }
     }
-
 }
 
 impl From<ParseIntError> for TiroError {
@@ -696,9 +697,6 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     }
 }
 
-// Helper function to determine if a line looks like the start of a new activity.
-// A line is considered a potential activity start if its first token is a number
-// (suggesting an explicit hour duration is provided).
 fn is_potential_activity_start(line: &str) -> bool {
     let mut tokens = line.split_whitespace();
     if let Some(first_token) = tokens.next() {
@@ -748,19 +746,26 @@ fn parse_all_lines(lines: &mut Iter<String>) -> Vec<LineParseResult> {
                 // Loop while the next line exists and is a valid continuation
                 while line_iter.peek().map_or(false, |next_line_to_peek| {
                     let next_line_str_for_check = next_line_to_peek.trim_start();
-                    !is_noop(next_line_str_for_check) &&
-                    parse_date(next_line_str_for_check).is_none() &&
-                    !is_potential_activity_start(next_line_str_for_check)
+                    !is_noop(next_line_str_for_check)
+                        && parse_date(next_line_str_for_check).is_none()
+                        && !is_potential_activity_start(next_line_str_for_check)
                 }) {
                     // The line is a continuation, so consume it and append its content.
-                    let consumed_continuation_line_ref = line_iter.next().expect("Peeked Some, so next should be Some");
-                    let consumed_continuation_line_str_trimmed = consumed_continuation_line_ref.trim_start();
+                    let consumed_continuation_line_ref = line_iter
+                        .next()
+                        .expect("Peeked Some, so next should be Some");
+                    let consumed_continuation_line_str_trimmed =
+                        consumed_continuation_line_ref.trim_start();
 
                     life_chunk.description.push_str("\n");
-                    life_chunk.description.push_str(consumed_continuation_line_str_trimmed);
+                    life_chunk
+                        .description
+                        .push_str(consumed_continuation_line_str_trimmed);
 
                     life_chunk.input.push_str("\n");
-                    life_chunk.input.push_str(consumed_continuation_line_str_trimmed);
+                    life_chunk
+                        .input
+                        .push_str(consumed_continuation_line_str_trimmed);
                 }
                 list_of_pr.push(Lc { life_chunk });
             }
@@ -769,11 +774,13 @@ fn parse_all_lines(lines: &mut Iter<String>) -> Vec<LineParseResult> {
 
     // Ensure the first element is a Date, if the list is not empty.
     // This assertion helps catch structural issues early.
-    assert!(list_of_pr.is_empty() || is_a_date_token(list_of_pr.first().unwrap()), "First element must be a Date token if list is not empty.");
+    assert!(
+        list_of_pr.is_empty() || is_a_date_token(list_of_pr.first().unwrap()),
+        "First element must be a Date token if list is not empty."
+    );
 
     list_of_pr
 }
-
 
 fn register_all_categories(list_of_timed_pr: &[LineParseResult]) -> ParseState {
     let mut parse_state = ParseState::new();
