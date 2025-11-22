@@ -13,7 +13,7 @@ use crate::summary::{
     compute_context_summary, format_category_summary, format_category_summary_with_note,
     merge_all_summaries, Summary, Timestamp,
 };
-use crate::Writer;
+pub type Writer = (Box<dyn Write>, bool);
 use anyhow::Result;
 
 pub struct Writers {
