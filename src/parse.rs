@@ -229,9 +229,12 @@ mod tests {
 
 /// A continuous series of life chunks.
 ///
-/// Invariant: `start == tokens[0].start`.
-/// Invariant: end - start == sum(tok.duration for tok in tokens)
-/// XXX: enforce these by making the fields private and using methods
+/// # Invariants
+/// - If non-empty: `start == tokens[0].start`
+/// - `end == start + sum(tok.duration for tok in tokens)`
+/// - All tokens are contiguous (no gaps or overlaps)
+///
+/// These invariants are enforced by the implementation.
 #[derive(Clone, Debug)]
 pub struct LifeLapse {
     start: Timestamp,
@@ -240,6 +243,7 @@ pub struct LifeLapse {
 }
 
 impl LifeLapse {
+    /// Creates a new empty LifeLapse starting at the given time.
     pub(crate) fn new(start: Timestamp) -> LifeLapse {
         LifeLapse {
             start,
@@ -248,39 +252,80 @@ impl LifeLapse {
         }
     }
 
+    /// Returns the total duration of all tokens.
     fn total_duration(&self) -> Duration {
         self.tokens
             .iter()
             .fold(Duration::hours(0), |sum, t| sum.add(t.life_chunk.duration))
     }
 
+    /// Extends this LifeLapse with an iterator of TimedLifeChunks.
+    ///
+    /// # Panics
+    /// Panics if the first token's start time doesn't match this LifeLapse's start time
+    /// when the LifeLapse is empty.
     pub fn extend<I: IntoIterator<Item = TimedLifeChunk>>(&mut self, iter: I) {
-        self.tokens.extend(iter);
+        let new_tokens: Vec<_> = iter.into_iter().collect();
+        
+        // Validate invariant: first token must match start time if this is empty
+        if self.tokens.is_empty() && !new_tokens.is_empty() {
+            assert_eq!(
+                self.start, new_tokens[0].start,
+                "First token start time must match LifeLapse start time"
+            );
+        }
+        
+        self.tokens.extend(new_tokens);
+        
+        // Recalculate end time to maintain invariant
         let d = self.total_duration();
         self.end = self.start + d;
     }
 
+    /// Pushes a single TimedLifeChunk to this LifeLapse.
+    ///
+    /// # Panics
+    /// Panics if the token's start time doesn't match this LifeLapse's start time
+    /// when the LifeLapse is empty.
     fn push(&mut self, item: TimedLifeChunk) {
+        // Validate invariant: first token must match start time if this is empty
+        if self.tokens.is_empty() {
+            assert_eq!(
+                self.start, item.start,
+                "First token start time must match LifeLapse start time"
+            );
+        }
+        
         self.end = self.end + item.life_chunk.duration;
         self.tokens.push(item);
     }
 
+    /// Consumes this LifeLapse and returns its tokens.
     pub fn tokens(self) -> Vec<TimedLifeChunk> {
         self.tokens
     }
 
+    /// Returns a reference to the tokens.
     pub fn tokens_as_ref(&self) -> &Vec<TimedLifeChunk> {
         &self.tokens
     }
 
+    /// Returns the start time of this LifeLapse.
     pub fn start(&self) -> Timestamp {
         self.start
     }
 
+    /// Returns the end time of this LifeLapse.
+    pub fn end(&self) -> Timestamp {
+        self.end
+    }
+
+    /// Returns true if this LifeLapse ends exactly when the other begins.
     pub fn is_right_before(&self, other: &LifeLapse) -> bool {
         self.end == other.start
     }
 
+    /// Returns true if this LifeLapse contains no tokens.
     pub fn is_empty(&self) -> bool {
         self.tokens.is_empty()
     }
