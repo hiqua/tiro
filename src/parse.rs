@@ -22,6 +22,12 @@ use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
 use anyhow::Result;
 
+// Re-export domain types for backward compatibility during migration
+pub use crate::domain::{
+    Category, LifeChunk, LifeLapse, LineParseResult, TimedLifeChunk, Timestamp as DomainTimestamp,
+    TiroToken,
+};
+
 #[cfg(test)]
 mod tests {
     use chrono::{Local, TimeZone};
@@ -227,171 +233,42 @@ mod tests {
     }
 }
 
-/// A continuous series of life chunks.
-///
-/// # Invariants
-/// - If non-empty: `start == tokens[0].start`
-/// - `end == start + sum(tok.duration for tok in tokens)`
-/// - All tokens are contiguous (no gaps or overlaps)
-///
-/// These invariants are enforced by the implementation.
-#[derive(Clone, Debug)]
-pub struct LifeLapse {
-    start: Timestamp,
-    end: Timestamp,
-    tokens: Vec<TimedLifeChunk>,
-}
-
-impl LifeLapse {
-    /// Creates a new empty LifeLapse starting at the given time.
-    pub(crate) fn new(start: Timestamp) -> LifeLapse {
-        LifeLapse {
-            start,
-            end: start,
-            tokens: vec![],
-        }
-    }
-
-    /// Returns the total duration of all tokens.
-    fn total_duration(&self) -> Duration {
-        self.tokens
-            .iter()
-            .fold(Duration::hours(0), |sum, t| sum.add(t.life_chunk.duration))
-    }
-
-    /// Extends this LifeLapse with an iterator of TimedLifeChunks.
-    ///
-    /// # Panics
-    /// Panics if the first token's start time doesn't match this LifeLapse's start time
-    /// when the LifeLapse is empty.
-    pub fn extend<I: IntoIterator<Item = TimedLifeChunk>>(&mut self, iter: I) {
-        let new_tokens: Vec<_> = iter.into_iter().collect();
-        
-        // Validate invariant: first token must match start time if this is empty
-        if self.tokens.is_empty() && !new_tokens.is_empty() {
-            assert_eq!(
-                self.start, new_tokens[0].start,
-                "First token start time must match LifeLapse start time"
-            );
-        }
-        
-        self.tokens.extend(new_tokens);
-        
-        // Recalculate end time to maintain invariant
-        let d = self.total_duration();
-        self.end = self.start + d;
-    }
-
-    /// Pushes a single TimedLifeChunk to this LifeLapse.
-    ///
-    /// # Panics
-    /// Panics if the token's start time doesn't match this LifeLapse's start time
-    /// when the LifeLapse is empty.
-    fn push(&mut self, item: TimedLifeChunk) {
-        // Validate invariant: first token must match start time if this is empty
-        if self.tokens.is_empty() {
-            assert_eq!(
-                self.start, item.start,
-                "First token start time must match LifeLapse start time"
-            );
-        }
-        
-        self.end = self.end + item.life_chunk.duration;
-        self.tokens.push(item);
-    }
-
-    /// Consumes this LifeLapse and returns its tokens.
-    pub fn tokens(self) -> Vec<TimedLifeChunk> {
-        self.tokens
-    }
-
-    /// Returns a reference to the tokens.
-    pub fn tokens_as_ref(&self) -> &Vec<TimedLifeChunk> {
-        &self.tokens
-    }
-
-    /// Returns the start time of this LifeLapse.
-    pub fn start(&self) -> Timestamp {
-        self.start
-    }
-
-    /// Returns the end time of this LifeLapse.
-    pub fn end(&self) -> Timestamp {
-        self.end
-    }
-
-    /// Returns true if this LifeLapse ends exactly when the other begins.
-    pub fn is_right_before(&self, other: &LifeLapse) -> bool {
-        self.end == other.start
-    }
-
-    /// Returns true if this LifeLapse contains no tokens.
-    pub fn is_empty(&self) -> bool {
-        self.tokens.is_empty()
-    }
-}
-
-#[derive(Clone)]
-pub enum TiroToken {
-    Tlc { tlc: TimedLifeChunk },
-    Date { date: Timestamp },
-}
-
-#[derive(Clone, Debug)]
-pub struct TimedLifeChunk {
-    pub start: Timestamp,
-    pub life_chunk: LifeChunk,
-}
-
-#[derive(Clone)]
-pub enum LineParseResult {
-    Lc { life_chunk: LifeChunk },
-    Date { date: Timestamp },
-}
-
-#[derive(Clone, Debug)]
-pub struct LifeChunk {
-    #[allow(dead_code)]
-    pub description: String,
-    pub duration: Duration,
-    pub categories: Vec<String>,
-    pub quadrant: Quadrant,
-    pub user_provided_quadrant: bool,
-    input: String,
-}
-
-impl LifeChunk {
-    pub(crate) fn get_input(&self) -> &str {
-        &self.input
-    }
-}
-
-/// The starting time is the earli
+/// The starting time is the earliest
 pub fn get_all_life_lapses(
     all_activities_line: Vec<Vec<String>>,
     config: &Config,
 ) -> (Timestamp, Vec<LifeLapse>) {
     let mut all_life_lapses = vec![];
-    let start_time = {
-        for activities_lines in all_activities_line {
-            let life_lapses = parse_activities(activities_lines.iter(), config);
-            all_life_lapses.extend(life_lapses);
-        }
-        all_life_lapses.iter().map(|ll| ll.start).min().unwrap()
+    for activities_lines in all_activities_line {
+        let life_lapses = parse_activities(activities_lines.iter(), config);
+        all_life_lapses.extend(life_lapses);
+    }
+
+    let start_time = if all_life_lapses.is_empty() {
+        Local::now()
+    } else {
+        all_life_lapses.iter().map(|ll| ll.start()).min().unwrap()
     };
 
-    all_life_lapses.sort_by_key(|ll| ll.start);
+    sort_and_filter_life_lapses(&mut all_life_lapses, start_time);
 
-    all_life_lapses = all_life_lapses
-        .into_iter()
-        .skip_while(|ll| ll.start < start_time)
+    (start_time, all_life_lapses)
+}
+
+pub fn sort_and_filter_life_lapses(
+    all_life_lapses: &mut Vec<LifeLapse>,
+    start_time: Timestamp,
+) {
+    all_life_lapses.sort_by_key(|ll| ll.start());
+
+    *all_life_lapses = all_life_lapses
+        .drain(..)
+        .skip_while(|ll| ll.start() < start_time)
         // Empty if only contained activities before starting time
         .filter(|ll| !ll.is_empty())
         .collect();
 
-    all_life_lapses = merge_strictly_compatible_lifelapses(all_life_lapses);
-
-    (start_time, all_life_lapses)
+    *all_life_lapses = merge_strictly_compatible_lifelapses(all_life_lapses.to_vec());
 }
 
 pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse> {
@@ -536,16 +413,17 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     let description = newline.join(" ");
 
     // XXX: what to do if description is empty (categories self-explaining). Could have None instead.
-    let qu = quadrant.or_else(|| Some(Default::default())).unwrap();
-    LifeChunk {
-        description,
+    let user_provided_quadrant = quadrant.is_some();
+    let qu = quadrant.unwrap_or_default();
+    
+    LifeChunk::new(
+        description.to_string(),
         duration,
         categories,
-        // XXX: redundant default
-        quadrant: qu,
-        user_provided_quadrant: quadrant.is_some(),
-        input: to_join.join(" "),
-    }
+        qu,
+        user_provided_quadrant,
+        to_join.join(" "),
+    )
 }
 
 /// this function should not exist, the conversion should happen now

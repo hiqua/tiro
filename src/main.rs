@@ -15,14 +15,16 @@ use clap::App;
 use notify::{watcher, RecursiveMode, Watcher};
 
 use crate::config::{load_config_from_matches, Config};
+use crate::domain::TimedLifeChunk;
+use crate::notification::spawn_notification_thread;
 use crate::output::{
     delay, get_all_lines, get_writers, write_global_summary, write_plan, write_summary, Writers,
 };
-use crate::notification::spawn_notification_thread;
-use crate::parse::{get_all_life_lapses, TimedLifeChunk};
+use crate::parse::get_all_life_lapses;
 use crate::summary::{compute_all_summaries, merge_summaries_on_same_date};
 
 mod config;
+mod domain;
 mod merge;
 mod notification;
 mod output;
