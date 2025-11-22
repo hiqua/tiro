@@ -130,10 +130,12 @@ mod tests {
         let base_dir = PathBuf::from("./target/test_temp_configs");
         // fs::create_dir_all(&base_dir).expect("Failed to create base test_temp_configs dir"); // Ensure base exists
         let test_specific_dir = base_dir.join(suffix);
-        fs::create_dir_all(&test_specific_dir).expect(&format!(
-            "Failed to create test specific temp dir: {:?}",
-            test_specific_dir
-        ));
+        fs::create_dir_all(&test_specific_dir).unwrap_or_else(|_| {
+            panic!(
+                "Failed to create test specific temp dir: {:?}",
+                test_specific_dir
+            )
+        });
         test_specific_dir
     }
 

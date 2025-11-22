@@ -135,7 +135,7 @@ mod tests {
         let summary = compute_summary(&timed_life_chunks);
 
         let mut expected_summary = HashMap::new();
-        expected_summary.insert("@work".to_string(), Duration::minutes(0 + 60));
+        expected_summary.insert("@work".to_string(), Duration::minutes(60));
         expected_summary.insert("@projA".to_string(), Duration::minutes(0));
         expected_summary.insert("@home".to_string(), Duration::minutes(0));
 
