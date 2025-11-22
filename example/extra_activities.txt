@@ -1,0 +1,10 @@
+# This file demonstrates multiple file handling.
+# These activities should be merged with those in activities.txt based on time.
+
+# This date is BEFORE some activities in activities.txt, testing global sorting.
+2021-01-03 12:00
+1 0 Lunch break @food
+
+# This continues from the last entry in activities.txt (assuming sequential flow for demo)
+2021-01-04 12:00
+1 0 Lunch with team @work @food

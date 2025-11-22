@@ -1,4 +1,4 @@
-2021-01-02 2:00
+2021-01-02 02:00
 8 10 @sleep
 
 2021-01-03 21:00
@@ -11,3 +11,18 @@
 5 0 @sleep
 0 10 @calls @1
 
+# Example of zero duration (implicit)
+2021-01-04 09:00
+0 0 Start of day routine @routine
+
+# Example of explicit quadrant tag
+0 30 Planning @1
+
+# Example of category tag mapped in config
+1 0 Coding session @work
+
+# Example of category tag NOT mapped (defaults to regular category)
+0 15 Random task @misc
+
+# Example of multiple tags
+0 45 Meeting with team @work @meeting
