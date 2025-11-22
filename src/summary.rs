@@ -349,7 +349,7 @@ pub fn format_category_summary_with_note(
     lines
 }
 
-pub fn compute_context_summary(contexts: &HashMap<String, Duration>) -> Vec<CategorySummary> {
+pub fn compute_context_summary(contexts: &HashMap<String, Duration>) -> Vec<CategorySummary<'_>> {
     let mut kk: Vec<&String> = Vec::new();
     kk.extend(contexts.keys());
     kk.sort();

@@ -259,6 +259,7 @@ pub enum LineParseResult {
 
 #[derive(Clone, Debug)]
 pub struct LifeChunk {
+    #[allow(dead_code)]
     pub description: String,
     pub duration: Duration,
     pub categories: Vec<String>,
@@ -366,7 +367,7 @@ pub fn read_stdin_lines() -> Result<Vec<String>> {
     Ok(lines)
 }
 
-fn parse_category(token: &str) -> Option<MetaCategory> {
+fn parse_category(token: &str) -> Option<MetaCategory<'_>> {
     let spp: Vec<&str> = token.split('@').collect();
     if spp.len() == 2 && spp[0].is_empty() {
         if let Ok(q) = Quadrant::from_str(token) {
