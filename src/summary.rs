@@ -34,19 +34,19 @@ mod tests {
     }
 
     #[test]
-    fn format_duration_longer_than_a_day() {
+    fn format_duration_duration_longer_than_day_returns_hours_greater_than_24() {
         let duration = Duration::hours(25);
         assert_eq!(format_duration(duration), "25h00");
     }
 
     #[test]
-    fn format_duration_prepends_a_0() {
+    fn format_duration_single_digit_hours_returns_padded_string() {
         let duration = Duration::hours(2) + Duration::minutes(15);
         assert_eq!(format_duration(duration), "02h15");
     }
 
     #[test]
-    fn test_compute_summary_basic() {
+    fn compute_summary_basic_chunks_returns_correct_durations() {
         let timed_life_chunks = vec![
             create_timed_chunk_from_line("0 30 Task 1 @work @projA"), // Duration 30m, cats @work, @projA
             create_timed_chunk_from_line("1 0 Task 2 @work"),         // Duration 60m, cats @work
@@ -70,7 +70,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_summary_empty_input() {
+    fn compute_summary_empty_input_returns_empty_summary() {
         let timed_life_chunks: Vec<TimedLifeChunk> = vec![];
         let summary = compute_summary(&timed_life_chunks);
         assert!(
@@ -80,7 +80,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_summary_no_categories_in_chunks() {
+    fn compute_summary_chunks_without_categories_returns_only_categorized_durations() {
         let timed_life_chunks = vec![
             create_timed_chunk_from_line("0 30 Task 1 no cat"), // No categories
             create_timed_chunk_from_line("1 0 Task 2 with cat @work"), // @work
@@ -102,7 +102,8 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_summary_multiple_categories_in_single_chunk() {
+    fn compute_summary_multiple_categories_in_single_chunk_returns_duration_added_to_all_categories(
+    ) {
         let timed_life_chunks = vec![
             create_timed_chunk_from_line("0 45 Session 1 @planning @meeting @clientA"),
             create_timed_chunk_from_line("0 30 Session 2 @meeting @internal"),
@@ -124,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_summary_zero_duration_chunks() {
+    fn compute_summary_zero_duration_chunks_returns_zero_duration_entries() {
         let timed_life_chunks = vec![
             create_timed_chunk_from_line("0 0 Task 1 zero duration @work @projA"),
             create_timed_chunk_from_line("1 0 Task 2 normal duration @work"),
@@ -146,7 +147,7 @@ mod tests {
 
     // Tests for compute_context_summary
     #[test]
-    fn test_compute_context_summary_empty() {
+    fn compute_context_summary_empty_map_returns_empty_vec() {
         let contexts: HashMap<String, Duration> = HashMap::new();
         let result = compute_context_summary(&contexts);
         assert!(
@@ -156,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_context_summary_basic_sorted() {
+    fn compute_context_summary_basic_map_returns_sorted_summaries() {
         let mut contexts: HashMap<String, Duration> = HashMap::new();
         contexts.insert("@work".to_string(), Duration::hours(2));
         contexts.insert("@home".to_string(), Duration::hours(1));
@@ -182,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_category_summary_empty() {
+    fn format_category_summary_empty_vec_returns_date_header_only() {
         let ctg_summary_vec: Vec<CategorySummary> = Vec::new();
         let test_date = get_test_date();
         // Date<Local>.to_string() produces "YYYY-MM-DD" which is then bolded.
@@ -196,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_category_summary_with_note_empty() {
+    fn format_category_summary_with_note_empty_vec_returns_date_header_with_note() {
         let ctg_summary_vec: Vec<CategorySummary> = Vec::new();
         let test_date = get_test_date();
         let note = "(custom test note)";
@@ -210,7 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_category_summary_basic() {
+    fn format_category_summary_basic_vec_returns_formatted_lines() {
         let test_date = get_test_date();
         let date_str_bold = test_date.to_string().bold().to_string();
         let ctg_summary_vec = vec![
@@ -238,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_category_summary_with_note_basic() {
+    fn format_category_summary_with_note_basic_vec_returns_formatted_lines_with_note() {
         let test_date = get_test_date();
         let date_str_bold = test_date.to_string().bold().to_string();
         let note = "(daily workout)";
@@ -253,6 +254,59 @@ mod tests {
         assert_eq!(result[0], format!("{} {}", date_str_bold, note));
         assert_eq!(result[1], "@exercise: 01h15");
         assert_eq!(result[2], "");
+    }
+    #[test]
+    fn merge_summaries_disjoint_summaries_returns_merged_summary() {
+        let mut s1 = HashMap::new();
+        s1.insert("@work".to_string(), Duration::hours(1));
+        let mut s2 = HashMap::new();
+        s2.insert("@work".to_string(), Duration::hours(2));
+        s2.insert("@home".to_string(), Duration::hours(1));
+
+        let merged = super::merge_summaries(s1, s2);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged.get("@work"), Some(&Duration::hours(3)));
+        assert_eq!(merged.get("@home"), Some(&Duration::hours(1)));
+    }
+
+    #[test]
+    fn merge_all_summaries_multiple_summaries_returns_accumulated_summary() {
+        let mut s1 = HashMap::new();
+        s1.insert("@work".to_string(), Duration::hours(1));
+        let mut s2 = HashMap::new();
+        s2.insert("@work".to_string(), Duration::hours(2));
+        let mut s3 = HashMap::new();
+        s3.insert("@home".to_string(), Duration::hours(1));
+
+        let merged = super::merge_all_summaries(&vec![s1, s2, s3]);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged.get("@work"), Some(&Duration::hours(3)));
+        assert_eq!(merged.get("@home"), Some(&Duration::hours(1)));
+    }
+
+    #[test]
+    fn merge_summaries_on_same_date_mixed_dates_returns_merged_by_date() {
+        let d1 = Local.ymd(2020, 12, 1).and_hms(10, 0, 0);
+        let d2 = Local.ymd(2020, 12, 1).and_hms(12, 0, 0); // Same day
+        let d3 = Local.ymd(2020, 12, 2).and_hms(10, 0, 0); // Next day
+
+        let mut s1 = HashMap::new();
+        s1.insert("@work".to_string(), Duration::hours(1));
+        let mut s2 = HashMap::new();
+        s2.insert("@work".to_string(), Duration::hours(2));
+        let mut s3 = HashMap::new();
+        s3.insert("@home".to_string(), Duration::hours(1));
+
+        let input = vec![(d1, s1), (d2, s2), (d3, s3)];
+        let merged = super::merge_summaries_on_same_date(input);
+
+        assert_eq!(merged.len(), 2); // 2 days
+                                     // First day (merged)
+        assert_eq!(merged[0].0.date(), d1.date());
+        assert_eq!(merged[0].1.get("@work"), Some(&Duration::hours(3)));
+        // Second day
+        assert_eq!(merged[1].0.date(), d3.date());
+        assert_eq!(merged[1].1.get("@home"), Some(&Duration::hours(1)));
     }
 }
 
