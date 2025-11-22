@@ -1,4 +1,5 @@
-use assert_cmd::Command;
+use std::process::Command;
+
 use predicates::prelude::*;
 use regex::Regex;
 use std::fs;
@@ -32,7 +33,7 @@ fn cli_basic_run_with_activities_file_outputs_to_stdout() {
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config").arg(config_path.to_str().unwrap());
 
     let output = cmd.assert().success();
@@ -92,7 +93,7 @@ fn cli_with_summary_output_file_creates_file() {
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config")
         .arg(config_path.to_str().unwrap())
         .arg("--summary")
@@ -149,7 +150,7 @@ fn cli_with_plan_output_file_creates_file() {
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config")
         .arg(config_path.to_str().unwrap())
         .arg("--plan")
@@ -211,7 +212,7 @@ fn cli_outputs_both_summary_and_global_summary() {
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config").arg(config_path.to_str().unwrap());
 
     let output = cmd.assert().success();
@@ -279,7 +280,7 @@ fn cli_with_separate_summary_and_plan_files() {
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config")
         .arg(config_path.to_str().unwrap())
         .arg("--summary")
@@ -328,7 +329,7 @@ fn cli_with_separate_summary_and_plan_files() {
 
 #[test]
 fn cli_with_nonexistent_config_fails() {
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config").arg("/nonexistent/config.toml");
 
     cmd.assert()
@@ -356,7 +357,7 @@ fn cli_with_stdin_input_processes_activities() {
     )
     .unwrap();
 
-    let mut cmd = Command::cargo_bin("tiro").unwrap();
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config")
         .arg(config_path.to_str().unwrap())
         .write_stdin("2020-12-01 09:00\n1 0 Morning task @urgent\n");

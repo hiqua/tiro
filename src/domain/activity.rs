@@ -101,6 +101,7 @@ impl LifeLapse {
     }
 
     /// Returns the end time of this LifeLapse.
+    #[allow(dead_code)]
     pub fn end(&self) -> Timestamp {
         self.end
     }
@@ -126,6 +127,7 @@ pub struct TimedLifeChunk {
 /// A chunk of time spent on activities with categories and description.
 #[derive(Clone, Debug)]
 pub struct LifeChunk {
+    #[allow(dead_code)]
     pub description: String,
     pub duration: Duration,
     pub categories: Vec<Category>,
