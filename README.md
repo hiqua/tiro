@@ -51,6 +51,11 @@ watch -c cargo --color=always build
 and copy-paste the listed commands, after inspection.
 
 
+## Design
+
+Files in design/ describe features, implemented or not. Only the high-level
+description and high-level behavior should appear there, these docs should be
+implementation-agnostic.
 
 ## Future Features (Ideas)
 ### Ability to merge several plannings
