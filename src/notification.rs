@@ -4,9 +4,9 @@ use std::thread;
 
 use std::time::Duration as StdDuration;
 
-use chrono::{Duration, Local};
+use chrono::{Local, TimeDelta};
 // use notify_rust::Notification;
-use time::OutOfRangeError;
+use chrono::OutOfRangeError;
 
 use crate::parse::{LifeChunk, TimedLifeChunk};
 
@@ -25,7 +25,7 @@ pub fn spawn_notification_thread(q: VecDeque<TimedLifeChunk>, rx: Receiver<()>) 
             let notify = || notify(lc);
 
             {
-                let upper_bound = Local::now() - Duration::minutes(5);
+                let upper_bound = Local::now() - TimeDelta::minutes(5);
                 if t < upper_bound {
                     continue;
                 } else if t < Local::now() {
@@ -35,7 +35,7 @@ pub fn spawn_notification_thread(q: VecDeque<TimedLifeChunk>, rx: Receiver<()>) 
             }
 
             // XXX: probably buggy in case of timeout of 0
-            let delay = Duration::minutes(5);
+            let delay = TimeDelta::minutes(5);
             let time_to_notification = unwrap_dur((t - Local::now() - delay).to_std());
             match rx.recv_timeout(time_to_notification) {
                 Ok(()) | Err(RecvTimeoutError::Disconnected) => {

@@ -11,8 +11,7 @@ use std::str::FromStr;
 
 use chrono::offset::LocalResult;
 use chrono::prelude::*;
-use chrono::{Local, TimeZone};
-use time::Duration;
+use chrono::{Local, TimeZone, TimeDelta};
 
 use crate::config::MetaCategory::{Quad, RegularCategory};
 use crate::config::{update_parse_state_from_config, Config, MetaCategory, Quadrant};
@@ -21,6 +20,7 @@ use crate::parse::LineParseResult::{Date, Lc};
 use crate::parse_state::ParseState;
 use crate::summary::Timestamp;
 use anyhow::Result;
+use chrono::NaiveDateTime;
 
 // Re-export domain types for backward compatibility during migration
 pub use crate::domain::{
@@ -67,7 +67,7 @@ pub fn sort_and_filter_life_lapses(
 }
 
 pub fn parse_activities(mut it: Iter<String>, config: &Config) -> Vec<LifeLapse> {
-    let list_of_pr = parse_all_lines(&mut it);
+    let list_of_pr = parse_all_lines(&mut it, config);
 
     let start_time = if let Some(Date { date }) = list_of_pr.first() {
         *date
@@ -147,19 +147,31 @@ fn parse_category(token: &str) -> Option<MetaCategory<'_>> {
     }
 }
 
-fn parse_date(s: &str) -> Option<Timestamp> {
+fn parse_date(s: &str, timezone: &Option<String>) -> Option<Timestamp> {
     let def = || s.parse::<Timestamp>();
-    let generic_fmt = |fmt| Local.datetime_from_str(s, fmt);
+    let generic_fmt = |fmt| {
+        if let Some(tz_str) = timezone {
+            let tz: chrono_tz::Tz = tz_str.parse().ok()?;
+            NaiveDateTime::parse_from_str(s, fmt)
+                .ok()
+                .and_then(|ndt| tz.from_local_datetime(&ndt).single())
+                .map(|dt| dt.with_timezone(&Local))
+        } else {
+            NaiveDateTime::parse_from_str(s, fmt)
+                .ok()
+                .and_then(|ndt| Local.from_local_datetime(&ndt).single())
+        }
+    };
 
     let formats = vec!["%Y-%m-%d %H:%M", "%Y-%m-%d %Hh%M"];
 
-    let mut results = vec![def()];
+    let mut results = vec![def().ok()];
 
     for fmt in formats {
         results.push(generic_fmt(fmt));
     }
 
-    results.iter().find_map(|r| r.ok())
+    results.iter().find_map(|r| *r)
 }
 
 pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
@@ -168,15 +180,15 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
         .split(|c: char| c == ',' || c.is_whitespace())
         .filter(|s| !s.is_empty());
 
-    let mut parse_token_as_duration = |parse_as: fn(i64) -> Duration| {
+    let mut parse_token_as_duration = |parse_as: fn(i64) -> TimeDelta| {
         tokens
             .next()
             .and_then(|i| i.parse::<i64>().ok())
             .map(parse_as)
-            .unwrap_or_else(Duration::zero)
+            .unwrap_or_else(TimeDelta::zero)
     };
-    let h = parse_token_as_duration(Duration::hours);
-    let m = parse_token_as_duration(Duration::minutes);
+    let h = parse_token_as_duration(TimeDelta::hours);
+    let m = parse_token_as_duration(TimeDelta::minutes);
 
     let duration = h + m;
 
@@ -222,14 +234,14 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
 }
 
 /// this function should not exist, the conversion should happen now
-fn parse_all_lines(it: &mut Iter<String>) -> Vec<LineParseResult> {
+fn parse_all_lines(it: &mut Iter<String>, config: &Config) -> Vec<LineParseResult> {
     let mut list_of_pr = vec![];
 
     for s in it {
         if is_noop(s) {
             continue;
         }
-        match process_line(s) {
+        match process_line(s, config) {
             // TODO: shouldn't unwrap
             Date { date } => list_of_pr.push(Date { date }),
             lp => {
@@ -283,10 +295,12 @@ fn tokens_from_timed_lpr(
 }
 
 /// Parse a line from the input
-fn process_line(line: &str) -> LineParseResult {
-    parse_date(line).map(|date| Date { date }).unwrap_or(Lc {
-        life_chunk: get_life_chunk(line),
-    })
+fn process_line(line: &str, config: &Config) -> LineParseResult {
+    parse_date(line, &config.timezone)
+        .map(|date| Date { date })
+        .unwrap_or(Lc {
+            life_chunk: get_life_chunk(line),
+        })
 }
 
 fn is_noop(line: &str) -> bool {
@@ -301,37 +315,36 @@ fn is_a_date_token(t: &LineParseResult) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Local, TimeZone};
-    use time::Duration;
+    use chrono::{Local, NaiveDateTime, TimeZone, TimeDelta};
 
-    use crate::config::Quadrant;
+    use crate::config::{Config, Quadrant};
     use crate::parse::{get_life_chunk, parse_date, process_line, LifeChunk, LineParseResult};
 
     #[test]
     fn parsing_1_valid_datetime_string_returns_datetime() {
-        let dt = Local.ymd(2014, 11, 28).and_hms(12, 0, 0);
+        let dt = Local.with_ymd_and_hms(2014, 11, 28, 12, 0, 0).unwrap();
         assert_eq!(
-            Local
-                .datetime_from_str("2014-11-28 12:00", "%Y-%m-%d %H:%M")
-                .ok(),
+            NaiveDateTime::parse_from_str("2014-11-28 12:00", "%Y-%m-%d %H:%M")
+                .ok()
+                .and_then(|ndt| Local.from_local_datetime(&ndt).single()),
             Some(dt)
         );
     }
 
     #[test]
     fn parse_date_custom_format_returns_datetime() {
-        let dt = Local.ymd(2023, 10, 26).and_hms(14, 30, 0);
-        assert_eq!(parse_date("2023-10-26 14h30"), Some(dt));
+        let dt = Local.with_ymd_and_hms(2023, 10, 26, 14, 30, 0).unwrap();
+        assert_eq!(parse_date("2023-10-26 14h30", &None), Some(dt));
     }
 
     #[test]
     fn parse_date_invalid_string_returns_none() {
-        assert_eq!(parse_date("invalid-date-string"), None);
+        assert_eq!(parse_date("invalid-date-string", &None), None);
     }
 
     #[test]
     fn parse_date_empty_string_returns_none() {
-        assert_eq!(parse_date(""), None);
+        assert_eq!(parse_date("", &None), None);
     }
 
     // Tests for get_life_chunk
@@ -340,7 +353,10 @@ mod tests {
         let line = "1 30 Meeting with team @Work @Q2";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Meeting with team");
-        assert_eq!(lc.duration, Duration::hours(1) + Duration::minutes(30));
+        assert_eq!(
+            lc.duration,
+            TimeDelta::hours(1) + TimeDelta::minutes(30)
+        );
         assert_eq!(lc.categories, vec!["@Work".to_string(), "@Q2".to_string()]); // Adjusted for current behavior
         assert_eq!(lc.quadrant, Quadrant::default()); // Adjusted for current behavior
         assert!(!lc.user_provided_quadrant); // Adjusted for current behavior
@@ -352,7 +368,7 @@ mod tests {
         let line = "그냥 프로젝트 작업 @Dev"; // "Just working on a project @Dev"
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "작업"); // Adjusted for current behavior
-        assert_eq!(lc.duration, Duration::zero());
+        assert_eq!(lc.duration, TimeDelta::zero());
         assert_eq!(lc.categories, vec!["@Dev".to_string()]);
         assert_eq!(lc.quadrant, Quadrant::default());
         assert!(!lc.user_provided_quadrant);
@@ -364,7 +380,7 @@ mod tests {
         let line = "2 0 Quick break";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Quick break");
-        assert_eq!(lc.duration, Duration::hours(2));
+        assert_eq!(lc.duration, TimeDelta::hours(2));
         assert_eq!(lc.categories, Vec::<String>::new());
         assert_eq!(lc.quadrant, Quadrant::default());
         assert!(!lc.user_provided_quadrant);
@@ -376,7 +392,7 @@ mod tests {
         let line = "0 45 Planning session @Q1";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Planning session");
-        assert_eq!(lc.duration, Duration::minutes(45));
+        assert_eq!(lc.duration, TimeDelta::minutes(45));
         assert_eq!(lc.categories, vec!["@Q1".to_string()]); // Adjusted for current behavior
         assert_eq!(lc.quadrant, Quadrant::default()); // Adjusted for current behavior
         assert!(!lc.user_provided_quadrant); // Adjusted for current behavior
@@ -388,7 +404,7 @@ mod tests {
         let line = "3 0 Reading a book @Leisure";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Reading a book");
-        assert_eq!(lc.duration, Duration::hours(3));
+        assert_eq!(lc.duration, TimeDelta::hours(3));
         assert_eq!(lc.categories, vec!["@Leisure".to_string()]);
         assert_eq!(lc.quadrant, Quadrant::default()); // Q4 is default
         assert!(!lc.user_provided_quadrant);
@@ -399,8 +415,9 @@ mod tests {
     #[test]
     fn process_line_date_string_returns_date_result() {
         let line = "2024-03-10 10:00";
-        let expected_date = Local.ymd(2024, 3, 10).and_hms(10, 0, 0);
-        match process_line(line) {
+        let config = Config::default();
+        let expected_date = Local.with_ymd_and_hms(2024, 3, 10, 10, 0, 0).unwrap();
+        match process_line(line, &config) {
             LineParseResult::Date { date } => assert_eq!(date, expected_date),
             _ => panic!("Expected LineParseResult::Date"),
         }
@@ -409,10 +426,11 @@ mod tests {
     #[test]
     fn process_line_life_chunk_string_returns_lc_result() {
         let line = "1 0 Coding @Dev";
-        match process_line(line) {
+        let config = Config::default();
+        match process_line(line, &config) {
             LineParseResult::Lc { life_chunk: lc } => {
                 assert_eq!(lc.description, "Coding");
-                assert_eq!(lc.duration, Duration::hours(1));
+                assert_eq!(lc.duration, TimeDelta::hours(1));
                 assert_eq!(lc.categories, vec!["@Dev".to_string()]);
                 assert_eq!(lc.quadrant, Quadrant::default());
                 assert!(!lc.user_provided_quadrant);
@@ -425,12 +443,13 @@ mod tests {
     #[test]
     fn process_line_comment_string_returns_lc_result_with_zero_duration() {
         let line = "# This is a comment";
-        match process_line(line) {
+        let config = Config::default();
+        match process_line(line, &config) {
             LineParseResult::Lc { life_chunk: lc } => {
                 // Based on get_life_chunk behavior:
                 // "#" is consumed by h_duration attempt, "This" by m_duration attempt
                 assert_eq!(lc.description, "is a comment");
-                assert_eq!(lc.duration, Duration::zero());
+                assert_eq!(lc.duration, TimeDelta::zero());
                 assert_eq!(lc.categories, Vec::<String>::new());
                 assert_eq!(lc.quadrant, Quadrant::default());
                 assert!(!lc.user_provided_quadrant);
@@ -443,10 +462,11 @@ mod tests {
     #[test]
     fn process_line_empty_string_returns_empty_lc_result() {
         let line = "";
-        match process_line(line) {
+        let config = Config::default();
+        match process_line(line, &config) {
             LineParseResult::Lc { life_chunk: lc } => {
                 assert_eq!(lc.description, "");
-                assert_eq!(lc.duration, Duration::zero());
+                assert_eq!(lc.duration, TimeDelta::zero());
                 assert_eq!(lc.categories, Vec::<String>::new());
                 assert_eq!(lc.quadrant, Quadrant::default());
                 assert!(!lc.user_provided_quadrant);
@@ -468,7 +488,7 @@ mod tests {
         let config = Config::default();
         let (start, lapses) = get_all_life_lapses(lines, &config);
 
-        assert_eq!(start, Local.ymd(2020, 12, 1).and_hms(10, 0, 0));
+        assert_eq!(start, Local.with_ymd_and_hms(2020, 12, 1, 10, 0, 0).unwrap());
         assert_eq!(lapses.len(), 1);
         assert_eq!(lapses[0].tokens_as_ref().len(), 2);
     }
@@ -486,7 +506,7 @@ mod tests {
         let (start, lapses) = get_all_life_lapses(lines, &config);
 
         // Start time should be the min of all start times
-        assert_eq!(start, Local.ymd(2020, 12, 1).and_hms(10, 0, 0));
+        assert_eq!(start, Local.with_ymd_and_hms(2020, 12, 1, 10, 0, 0).unwrap());
         // They should be merged if compatible
         // 10:00 + 1h = 11:00. Second file starts at 11:00.
         // They are compatible and touching.
@@ -499,7 +519,7 @@ mod tests {
         let line = "1  0   Task  with   spaces   @work";
         let lc = get_life_chunk(line);
         assert_eq!(lc.description, "Task with spaces");
-        assert_eq!(lc.duration, Duration::hours(1));
+        assert_eq!(lc.duration, TimeDelta::hours(1));
         assert_eq!(lc.categories, vec!["@work".to_string()]);
     }
 }

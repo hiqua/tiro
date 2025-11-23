@@ -33,7 +33,7 @@ pub fn get_output_writer(
                         start_time.year(),
                         start_time.iso_week().week()
                     ),
-                    &format!("{}", start_time.date().naive_local()),
+                    &format!("{}", start_time.date_naive()),
                     &format!("{}_{}.txt", prefix, filetime),
                 ]
                 .iter()
@@ -119,6 +119,7 @@ fn format_line_in_lines(s: &str, size: usize) -> Vec<String> {
     lines.iter().map(|lv| lv.join(" ")).collect()
 }
 
+use chrono::TimeDelta;
 fn format_life_chunk(chunk: &LifeChunk, start_time: Timestamp) -> String {
     let screen_size = 70;
     let end_time = start_time + chunk.duration;

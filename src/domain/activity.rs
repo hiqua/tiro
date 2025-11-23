@@ -1,8 +1,7 @@
 //! Activity domain types for time tracking.
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, TimeDelta};
 use std::ops::Add;
-use time::Duration;
 
 use crate::config::Quadrant;
 
@@ -38,10 +37,12 @@ impl LifeLapse {
     }
 
     /// Returns the total duration of all tokens.
-    fn total_duration(&self) -> Duration {
+    fn total_duration(&self) -> TimeDelta {
         self.tokens
             .iter()
-            .fold(Duration::hours(0), |sum, t| sum.add(t.life_chunk.duration))
+            .fold(TimeDelta::hours(0), |sum, t| {
+                sum.add(t.life_chunk.duration)
+            })
     }
 
     /// Extends this LifeLapse with an iterator of TimedLifeChunks.
@@ -129,7 +130,7 @@ pub struct TimedLifeChunk {
 pub struct LifeChunk {
     #[allow(dead_code)]
     pub description: String,
-    pub duration: Duration,
+    pub duration: TimeDelta,
     pub categories: Vec<Category>,
     pub quadrant: Quadrant,
     pub user_provided_quadrant: bool,
@@ -140,7 +141,7 @@ impl LifeChunk {
     /// Creates a new LifeChunk.
     pub(crate) fn new(
         description: String,
-        duration: Duration,
+        duration: TimeDelta,
         categories: Vec<Category>,
         quadrant: Quadrant,
         user_provided_quadrant: bool,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::iter::Sum;
 
 use colored::Colorize;
-use time::Duration;
+use chrono::TimeDelta;
 
 use crate::config::Category;
 use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
@@ -11,14 +11,14 @@ use chrono::{Date, DateTime, Datelike, Local};
 use std::ops::Add;
 
 /// A summary matching activities to their total duration in a day.
-pub(crate) type Summary = HashMap<String, Duration>;
+pub(crate) type Summary = HashMap<String, TimeDelta>;
 
 /// The timestamp of activities.
 pub(crate) type Timestamp = DateTime<Local>;
 
 pub struct CategorySummary<'a> {
     pub name: &'a Category,
-    pub duration: Duration,
+    pub duration: TimeDelta,
 }
 
 fn merge_summaries(s1: Summary, s2: Summary) -> Summary {
@@ -26,7 +26,7 @@ fn merge_summaries(s1: Summary, s2: Summary) -> Summary {
     for (k, v) in s2.iter() {
         let new_duration = s
             .entry(k.clone())
-            .or_insert_with(|| Duration::minutes(0))
+            .or_insert_with(|| TimeDelta::minutes(0))
             .add(*v);
         s.insert(k.clone(), new_duration);
     }
@@ -50,13 +50,13 @@ pub fn merge_summaries_on_same_date(
 
     for (timestamp, summary) in summaries {
         assert!(!new_summaries.is_empty());
-        if Some(timestamp.date()) == current_date || current_date.is_none() {
+        if Some(timestamp.date_naive()) == current_date || current_date.is_none() {
             let (_, last) = new_summaries.pop().unwrap();
             new_summaries.push((timestamp, merge_summaries(last, summary)));
         } else {
             new_summaries.push((timestamp, summary));
         }
-        current_date = Some(timestamp.date());
+        current_date = Some(timestamp.date_naive());
     }
 
     new_summaries
@@ -103,7 +103,7 @@ pub fn format_category_summary_with_note(
     lines
 }
 
-pub fn compute_context_summary(contexts: &HashMap<String, Duration>) -> Vec<CategorySummary<'_>> {
+pub fn compute_context_summary(contexts: &HashMap<String, TimeDelta>) -> Vec<CategorySummary<'_>> {
     let mut kk: Vec<&String> = Vec::new();
     kk.extend(contexts.keys());
     kk.sort();
@@ -122,7 +122,7 @@ pub fn compute_context_summary(contexts: &HashMap<String, Duration>) -> Vec<Cate
     struct_c
 }
 
-fn format_duration(d: Duration) -> String {
+fn format_duration(d: TimeDelta) -> String {
     let mut buf = String::with_capacity(5);
     let m = (d.num_minutes() % 60).to_string();
     let h = d.num_hours().to_string();
@@ -148,7 +148,7 @@ fn update_summary_from_life_chunk(chunk: &LifeChunk, summary: &mut Summary) {
     for cat in &chunk.categories {
         let curr_dur = summary
             .entry(cat.clone().to_string())
-            .or_insert_with(Duration::zero);
+            .or_insert_with(TimeDelta::zero);
         *curr_dur = *curr_dur + chunk.duration;
     }
 }
@@ -162,10 +162,9 @@ mod tests {
         compute_context_summary, compute_summary, format_category_summary,
         format_category_summary_with_note, format_duration, CategorySummary, Summary,
     };
-    use chrono::{Date, Datelike, Local, TimeZone, Utc};
+    use chrono::{Date, Datelike, Local, TimeZone, Utc, TimeDelta};
     use colored::Colorize;
     use std::collections::HashMap;
-    use time::Duration; // For asserting bolded dates
 
     // Helper to create TimedLifeChunk for tests using get_life_chunk
     // The start time of TimedLifeChunk is not used by compute_summary, so it can be arbitrary.
@@ -178,13 +177,13 @@ mod tests {
 
     #[test]
     fn format_duration_duration_longer_than_day_returns_hours_greater_than_24() {
-        let duration = Duration::hours(25);
+        let duration = TimeDelta::hours(25);
         assert_eq!(format_duration(duration), "25h00");
     }
 
     #[test]
     fn format_duration_single_digit_hours_returns_padded_string() {
-        let duration = Duration::hours(2) + Duration::minutes(15);
+        let duration = TimeDelta::hours(2) + TimeDelta::minutes(15);
         assert_eq!(format_duration(duration), "02h15");
     }
 
@@ -202,9 +201,9 @@ mod tests {
         // Based on current knowledge of get_life_chunk, quadrant tags like @Q1 can be misparsed as categories.
         // Assuming @work, @projA, @home are not quadrant-like.
         let mut expected_summary = HashMap::new();
-        expected_summary.insert("@work".to_string(), Duration::minutes(30 + 60));
-        expected_summary.insert("@projA".to_string(), Duration::minutes(30));
-        expected_summary.insert("@home".to_string(), Duration::minutes(15));
+        expected_summary.insert("@work".to_string(), TimeDelta::minutes(30 + 60));
+        expected_summary.insert("@projA".to_string(), TimeDelta::minutes(30));
+        expected_summary.insert("@home".to_string(), TimeDelta::minutes(15));
 
         assert_eq!(summary.len(), expected_summary.len());
         assert_eq!(summary.get("@work"), expected_summary.get("@work"));
@@ -233,7 +232,7 @@ mod tests {
         let summary = compute_summary(&timed_life_chunks);
 
         let mut expected_summary = HashMap::new();
-        expected_summary.insert("@work".to_string(), Duration::minutes(60));
+        expected_summary.insert("@work".to_string(), TimeDelta::minutes(60));
 
         assert_eq!(summary.len(), expected_summary.len());
         assert_eq!(summary.get("@work"), expected_summary.get("@work"));
@@ -255,10 +254,10 @@ mod tests {
         let summary = compute_summary(&timed_life_chunks);
 
         let mut expected_summary = HashMap::new();
-        expected_summary.insert("@planning".to_string(), Duration::minutes(45));
-        expected_summary.insert("@meeting".to_string(), Duration::minutes(45 + 30));
-        expected_summary.insert("@clientA".to_string(), Duration::minutes(45));
-        expected_summary.insert("@internal".to_string(), Duration::minutes(30));
+        expected_summary.insert("@planning".to_string(), TimeDelta::minutes(45));
+        expected_summary.insert("@meeting".to_string(), TimeDelta::minutes(45 + 30));
+        expected_summary.insert("@clientA".to_string(), TimeDelta::minutes(45));
+        expected_summary.insert("@internal".to_string(), TimeDelta::minutes(30));
 
         assert_eq!(summary.len(), expected_summary.len());
         assert_eq!(summary.get("@planning"), expected_summary.get("@planning"));
@@ -278,9 +277,9 @@ mod tests {
         let summary = compute_summary(&timed_life_chunks);
 
         let mut expected_summary = HashMap::new();
-        expected_summary.insert("@work".to_string(), Duration::minutes(60));
-        expected_summary.insert("@projA".to_string(), Duration::minutes(0));
-        expected_summary.insert("@home".to_string(), Duration::minutes(0));
+        expected_summary.insert("@work".to_string(), TimeDelta::minutes(60));
+        expected_summary.insert("@projA".to_string(), TimeDelta::minutes(0));
+        expected_summary.insert("@home".to_string(), TimeDelta::minutes(0));
 
         assert_eq!(summary.len(), expected_summary.len());
         assert_eq!(summary.get("@work"), expected_summary.get("@work"));
@@ -291,7 +290,7 @@ mod tests {
     // Tests for compute_context_summary
     #[test]
     fn compute_context_summary_empty_map_returns_empty_vec() {
-        let contexts: HashMap<String, Duration> = HashMap::new();
+        let contexts: HashMap<String, TimeDelta> = HashMap::new();
         let result = compute_context_summary(&contexts);
         assert!(
             result.is_empty(),
@@ -301,23 +300,23 @@ mod tests {
 
     #[test]
     fn compute_context_summary_basic_map_returns_sorted_summaries() {
-        let mut contexts: HashMap<String, Duration> = HashMap::new();
-        contexts.insert("@work".to_string(), Duration::hours(2));
-        contexts.insert("@home".to_string(), Duration::hours(1));
-        contexts.insert("@study".to_string(), Duration::minutes(30));
+        let mut contexts: HashMap<String, TimeDelta> = HashMap::new();
+        contexts.insert("@work".to_string(), TimeDelta::hours(2));
+        contexts.insert("@home".to_string(), TimeDelta::hours(1));
+        contexts.insert("@study".to_string(), TimeDelta::minutes(30));
 
         let result = compute_context_summary(&contexts);
 
         assert_eq!(result.len(), 3);
         // Check order and content (sorted alphabetically by name)
         assert_eq!(result[0].name, "@home");
-        assert_eq!(result[0].duration, Duration::hours(1));
+        assert_eq!(result[0].duration, TimeDelta::hours(1));
 
         assert_eq!(result[1].name, "@study");
-        assert_eq!(result[1].duration, Duration::minutes(30));
+        assert_eq!(result[1].duration, TimeDelta::minutes(30));
 
         assert_eq!(result[2].name, "@work");
-        assert_eq!(result[2].duration, Duration::hours(2));
+        assert_eq!(result[2].duration, TimeDelta::hours(2));
     }
 
     // Tests for format_category_summary and format_category_summary_with_note
@@ -360,11 +359,11 @@ mod tests {
         let ctg_summary_vec = vec![
             CategorySummary {
                 name: "@food",
-                duration: Duration::minutes(45),
+                duration: TimeDelta::minutes(45),
             },
             CategorySummary {
                 name: "@sleep",
-                duration: Duration::hours(8),
+                duration: TimeDelta::hours(8),
             },
         ];
         // compute_context_summary sorts its output. If this Vec is manually created and not sorted,
@@ -388,7 +387,7 @@ mod tests {
         let note = "(daily workout)";
         let ctg_summary_vec = vec![CategorySummary {
             name: "@exercise",
-            duration: Duration::hours(1) + Duration::minutes(15),
+            duration: TimeDelta::hours(1) + TimeDelta::minutes(15),
         }];
 
         let result = format_category_summary_with_note(ctg_summary_vec, test_date, note);
@@ -401,30 +400,30 @@ mod tests {
     #[test]
     fn merge_summaries_disjoint_summaries_returns_merged_summary() {
         let mut s1 = HashMap::new();
-        s1.insert("@work".to_string(), Duration::hours(1));
+        s1.insert("@work".to_string(), TimeDelta::hours(1));
         let mut s2 = HashMap::new();
-        s2.insert("@work".to_string(), Duration::hours(2));
-        s2.insert("@home".to_string(), Duration::hours(1));
+        s2.insert("@work".to_string(), TimeDelta::hours(2));
+        s2.insert("@home".to_string(), TimeDelta::hours(1));
 
         let merged = super::merge_summaries(s1, s2);
         assert_eq!(merged.len(), 2);
-        assert_eq!(merged.get("@work"), Some(&Duration::hours(3)));
-        assert_eq!(merged.get("@home"), Some(&Duration::hours(1)));
+        assert_eq!(merged.get("@work"), Some(&TimeDelta::hours(3)));
+        assert_eq!(merged.get("@home"), Some(&TimeDelta::hours(1)));
     }
 
     #[test]
     fn merge_all_summaries_multiple_summaries_returns_accumulated_summary() {
         let mut s1 = HashMap::new();
-        s1.insert("@work".to_string(), Duration::hours(1));
+        s1.insert("@work".to_string(), TimeDelta::hours(1));
         let mut s2 = HashMap::new();
-        s2.insert("@work".to_string(), Duration::hours(2));
+        s2.insert("@work".to_string(), TimeDelta::hours(2));
         let mut s3 = HashMap::new();
-        s3.insert("@home".to_string(), Duration::hours(1));
+        s3.insert("@home".to_string(), TimeDelta::hours(1));
 
         let merged = super::merge_all_summaries(&vec![s1, s2, s3]);
         assert_eq!(merged.len(), 2);
-        assert_eq!(merged.get("@work"), Some(&Duration::hours(3)));
-        assert_eq!(merged.get("@home"), Some(&Duration::hours(1)));
+        assert_eq!(merged.get("@work"), Some(&TimeDelta::hours(3)));
+        assert_eq!(merged.get("@home"), Some(&TimeDelta::hours(1)));
     }
 
     #[test]
@@ -434,21 +433,21 @@ mod tests {
         let d3 = Local.ymd(2020, 12, 2).and_hms(10, 0, 0); // Next day
 
         let mut s1 = HashMap::new();
-        s1.insert("@work".to_string(), Duration::hours(1));
+        s1.insert("@work".to_string(), TimeDelta::hours(1));
         let mut s2 = HashMap::new();
-        s2.insert("@work".to_string(), Duration::hours(2));
+        s2.insert("@work".to_string(), TimeDelta::hours(2));
         let mut s3 = HashMap::new();
-        s3.insert("@home".to_string(), Duration::hours(1));
+        s3.insert("@home".to_string(), TimeDelta::hours(1));
 
         let input = vec![(d1, s1), (d2, s2), (d3, s3)];
         let merged = super::merge_summaries_on_same_date(input);
 
         assert_eq!(merged.len(), 2); // 2 days
                                      // First day (merged)
-        assert_eq!(merged[0].0.date(), d1.date());
-        assert_eq!(merged[0].1.get("@work"), Some(&Duration::hours(3)));
+        assert_eq!(merged[0].0.date_naive(), d1.date_naive());
+        assert_eq!(merged[0].1.get("@work"), Some(&TimeDelta::hours(3)));
         // Second day
-        assert_eq!(merged[1].0.date(), d3.date());
-        assert_eq!(merged[1].1.get("@home"), Some(&Duration::hours(1)));
+        assert_eq!(merged[1].0.date_naive(), d3.date_naive());
+        assert_eq!(merged[1].1.get("@home"), Some(&TimeDelta::hours(1)));
     }
 }

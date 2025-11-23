@@ -27,6 +27,7 @@ pub struct Config {
     pub summary_out: Option<String>,
     pub plan_out: Option<String>,
     activity_paths: BTreeSet<PathBuf>,
+    pub timezone: Option<String>,
 }
 
 impl Config {
@@ -511,6 +512,11 @@ pub fn load_config_from_matches(matches: &ArgMatches) -> Config {
         conf.summary_out = matches.value_of("summary").map(|s| s.to_string());
     }
     conf.plan_out = matches.value_of("plan").map(|s| s.to_string());
+
+    if let Ok(tz) = env::var("TZ") {
+        conf.timezone = Some(tz);
+    }
+
     conf
 }
 

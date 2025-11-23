@@ -13,8 +13,9 @@ use crate::summary::{
     compute_context_summary, format_category_summary, format_category_summary_with_note,
     merge_all_summaries, Summary, Timestamp,
 };
-use crate::Writer;
 use anyhow::Result;
+
+pub type Writer = (Box<dyn Write>, bool);
 
 pub struct Writers {
     pub plan_writers: Vec<Writer>,
