@@ -15,14 +15,29 @@ use crate::config::Quadrant::*;
 use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
 use crate::summary::Timestamp;
 
+pub enum OutputTarget {
+    Stdout,
+    File(PathBuf),
+    Managed {
+        path: PathBuf,
+        dir: PathBuf,
+        prefix: String,
+    },
+}
+
+pub struct OutputWriter {
+    target: OutputTarget,
+    color: bool,
+}
+
 pub fn get_output_writer(
     path: Option<&str>,
     prefix: &str,
     filetime: &str,
     start_time: Timestamp,
-) -> (Box<dyn Write>, bool) {
-    let (out_writer, color) = match path {
-        Some("-") => (Box::new(io::stdout()) as Box<dyn Write>, true),
+) -> OutputWriter {
+    let (target, color) = match path {
+        Some("-") => (OutputTarget::Stdout, true),
         Some(x) => {
             let path = Path::new(x);
             if path.is_dir() {
@@ -43,20 +58,26 @@ pub fn get_output_writer(
                         .expect("Could not create some parents of the output files.");
                 }
                 (
-                    Box::new(File::create(&file_path).unwrap()) as Box<dyn Write>,
+                    OutputTarget::Managed {
+                        path: file_path,
+                        dir: Path::new(x).join(format!(
+                            "{:4}-w{:02}/{}",
+                            start_time.year(),
+                            start_time.iso_week().week(),
+                            start_time.date().naive_local()
+                        )),
+                        prefix: prefix.to_string(),
+                    },
                     false,
                 )
             } else {
-                (
-                    Box::new(File::create(path).unwrap()) as Box<dyn Write>,
-                    false,
-                )
+                (OutputTarget::File(PathBuf::from(x)), false)
             }
         }
-        None => (Box::new(io::stdout()) as Box<dyn Write>, true),
+        None => (OutputTarget::Stdout, true),
     };
 
-    (out_writer, color)
+    OutputWriter { target, color }
 }
 
 pub fn format_lifelapses(lifelapses: &[LifeLapse]) -> Vec<String> {
@@ -67,17 +88,66 @@ pub fn format_lifelapses(lifelapses: &[LifeLapse]) -> Vec<String> {
     lines
 }
 
+/// Scans the given directory for files starting with `prefix` and ending with `.txt`.
+/// If the content of an existing file is a prefix of `new_content`, the existing file is deleted.
+/// This helps in removing redundant intermediate files.
+fn cleanup_redundant_files(dir: &Path, prefix: &str, new_content: &str) -> Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                if file_name.starts_with(prefix) && file_name.ends_with(".txt") {
+                    let content = std::fs::read_to_string(&path)?;
+                    let content_trimmed = content.trim_end_matches(['\n', '\r']);
+
+                    if let Some(remainder) = new_content.strip_prefix(content_trimmed) {
+                        if remainder.is_empty()
+                            || remainder.starts_with('\n')
+                            || remainder.starts_with('\r')
+                        {
+                            std::fs::remove_file(&path)?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Need this producer because the coloring won't be flexible otherwise
 pub fn write_to(
     output_producer: impl Fn() -> Vec<String>,
-    writer: &mut Box<dyn Write>,
-    color: bool,
+    writer: &mut OutputWriter,
 ) -> Result<()> {
-    if !color {
+    let output = output_producer();
+    let content = output.join("\n");
+
+    if let OutputTarget::Managed {
+        ref dir,
+        ref prefix,
+        ..
+    } = writer.target
+    {
+        cleanup_redundant_files(dir, prefix, &content)?;
+    }
+
+    let mut out_writer: Box<dyn Write> = match &writer.target {
+        OutputTarget::Stdout => Box::new(io::stdout()),
+        OutputTarget::File(path) | OutputTarget::Managed { path, .. } => {
+            Box::new(File::create(path)?)
+        }
+    };
+
+    if !writer.color {
         set_override(false);
     }
-    let output = output_producer();
-    writeln!(writer, "{}", output.join("\n"))?;
+    writeln!(out_writer, "{}", content)?;
     unset_override();
     Ok(())
 }
@@ -155,4 +225,96 @@ fn color_line(s: String, q: Quadrant) -> String {
 
 fn get_warning_overlapping() -> String {
     "\n/!\\ Overlapping activities /!\\\n".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_cleanup_redundant_files_superset() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create an existing file
+        let file_path = dir_path.join(format!("{}_old.txt", prefix));
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "line 1").unwrap();
+        writeln!(file, "line 2").unwrap();
+
+        // New content is a superset
+        let new_content = "line 1\nline 2\nline 3\n";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(!file_path.exists(), "Old file should be deleted");
+    }
+
+    #[test]
+    fn test_cleanup_redundant_files_not_superset() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create an existing file
+        let file_path = dir_path.join(format!("{}_old.txt", prefix));
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "line 1").unwrap();
+        writeln!(file, "line 2").unwrap();
+
+        // New content is different
+        let new_content = "line 1\nline 3\n";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(file_path.exists(), "Old file should be preserved");
+    }
+
+    #[test]
+    fn test_cleanup_redundant_files_exact_match() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create an existing file
+        let file_path = dir_path.join(format!("{}_old.txt", prefix));
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "line 1").unwrap();
+
+        // New content is exact match
+        let new_content = "line 1\n";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(
+            !file_path.exists(),
+            "Old file should be deleted (exact match)"
+        );
+    }
+
+    #[test]
+    fn test_cleanup_redundant_files_different_prefix() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create a file with different prefix
+        let file_path = dir_path.join("other_prefix_old.txt");
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "line 1").unwrap();
+
+        // New content is superset
+        let new_content = "line 1\nline 2\n";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(
+            file_path.exists(),
+            "File with different prefix should be preserved"
+        );
+    }
 }
