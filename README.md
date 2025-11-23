@@ -39,7 +39,14 @@ tiro -a example/activities.txt
 ### Building
 
 ```
-watch -c cargo --color=always build
+cargo --color=always build
+```
+
+All commits should pass:
+```
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
 
 ### Releasing
