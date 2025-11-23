@@ -48,7 +48,7 @@ pub fn get_output_writer(
                         start_time.year(),
                         start_time.iso_week().week()
                     ),
-                    &format!("{}", start_time.date().naive_local()),
+                    &format!("{}", start_time.date_naive()),
                     &format!("{}_{}.txt", prefix, filetime),
                 ]
                 .iter()
@@ -64,7 +64,7 @@ pub fn get_output_writer(
                             "{:4}-w{:02}/{}",
                             start_time.year(),
                             start_time.iso_week().week(),
-                            start_time.date().naive_local()
+                            start_time.date_naive()
                         )),
                         prefix: prefix.to_string(),
                     },
@@ -191,7 +191,7 @@ fn format_line_in_lines(s: &str, size: usize) -> Vec<String> {
 
 fn format_life_chunk(chunk: &LifeChunk, start_time: Timestamp) -> String {
     let screen_size = 70;
-    let end_time = start_time + chunk.duration;
+    let end_time = start_time + chunk.duration.to_std().unwrap();
 
     let mut lines_to_print = vec![];
     {

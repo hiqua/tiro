@@ -266,7 +266,7 @@ fn tokens_from_timed_lpr(
                     start: curr_time,
                     life_chunk,
                 };
-                curr_time = curr_time + duration;
+                curr_time = curr_time + duration.to_std().unwrap();
                 tiro_tokens.push(TiroToken::Tlc { tlc })
             }
             Date { date } => {
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn parsing_1_valid_datetime_string_returns_datetime() {
-        let dt = Local.ymd(2014, 11, 28).and_hms(12, 0, 0);
+        let dt = Local.with_ymd_and_hms(2014, 11, 28, 12, 0, 0).unwrap();
         assert_eq!(
             Local
                 .datetime_from_str("2014-11-28 12:00", "%Y-%m-%d %H:%M")
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn parse_date_custom_format_returns_datetime() {
-        let dt = Local.ymd(2023, 10, 26).and_hms(14, 30, 0);
+        let dt = Local.with_ymd_and_hms(2023, 10, 26, 14, 30, 0).unwrap();
         assert_eq!(parse_date("2023-10-26 14h30"), Some(dt));
     }
 
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn process_line_date_string_returns_date_result() {
         let line = "2024-03-10 10:00";
-        let expected_date = Local.ymd(2024, 3, 10).and_hms(10, 0, 0);
+        let expected_date = Local.with_ymd_and_hms(2024, 3, 10, 10, 0, 0).unwrap();
         match process_line(line) {
             LineParseResult::Date { date } => assert_eq!(date, expected_date),
             _ => panic!("Expected LineParseResult::Date"),
@@ -465,7 +465,7 @@ mod tests {
         let config = Config::default();
         let (start, lapses) = get_all_life_lapses(lines, &config);
 
-        assert_eq!(start, Local.ymd(2020, 12, 1).and_hms(10, 0, 0));
+        assert_eq!(start, Local.with_ymd_and_hms(2020, 12, 1, 10, 0, 0).unwrap());
         assert_eq!(lapses.len(), 1);
         assert_eq!(lapses[0].tokens_as_ref().len(), 2);
     }
@@ -483,7 +483,7 @@ mod tests {
         let (start, lapses) = get_all_life_lapses(lines, &config);
 
         // Start time should be the min of all start times
-        assert_eq!(start, Local.ymd(2020, 12, 1).and_hms(10, 0, 0));
+        assert_eq!(start, Local.with_ymd_and_hms(2020, 12, 1, 10, 0, 0).unwrap());
         // They should be merged if compatible
         // 10:00 + 1h = 11:00. Second file starts at 11:00.
         // They are compatible and touching.

@@ -80,7 +80,7 @@ mod tests {
     use time::Duration;
 
     fn create_lifelapse(start_h: u32, duration_h: i64) -> LifeLapse {
-        let start = Local.ymd(2020, 12, 1).and_hms(start_h, 0, 0);
+        let start = Local.with_ymd_and_hms(2020, 12, 1, start_h, 0, 0).unwrap();
         let mut ll = LifeLapse::new(start);
         let lc = get_life_chunk(&format!("{} 0 test", duration_h));
         let tlc = TimedLifeChunk {
@@ -124,40 +124,40 @@ mod tests {
     #[test]
     fn are_compatible_disjoint_intervals_returns_true() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(16, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 16, 0, 0).unwrap(),
         };
         let i2 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         assert!(are_compatible(vec![&i1, &i2]));
     }
     #[test]
     fn are_compatible_three_intervals_with_overlap_returns_false() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         let i2 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         let i3 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(20, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 20, 0, 0).unwrap(),
         };
         assert!(!are_compatible(vec![&i3, &i1, &i2]));
     }
     #[test]
     fn are_compatible_two_overlapping_intervals_returns_false() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(16, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 16, 0, 0).unwrap(),
         };
         let i2 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(15, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(17, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 15, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 17, 0, 0).unwrap(),
         };
         assert!(!are_compatible(vec![&i1, &i2]));
     }
@@ -165,12 +165,12 @@ mod tests {
     #[test]
     fn are_compatible_touching_intervals_returns_true() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(16, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 16, 0, 0).unwrap(),
         };
         let i2 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(16, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(18, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 16, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 18, 0, 0).unwrap(),
         };
         // Touching intervals are compatible in this logic (end == start is allowed)
         // The check is `if i1.end > i2.start { return false; }`
@@ -185,8 +185,8 @@ mod tests {
     #[test]
     fn are_compatible_single_interval_returns_true() {
         let i1 = Interval {
-            start: Local.ymd(2020, 12, 1).and_hms(14, 0, 0),
-            end: Local.ymd(2020, 12, 1).and_hms(16, 0, 0),
+            start: Local.with_ymd_and_hms(2020, 12, 1, 14, 0, 0).unwrap(),
+            end: Local.with_ymd_and_hms(2020, 12, 1, 16, 0, 0).unwrap(),
         };
         assert!(are_compatible(vec![&i1]));
     }

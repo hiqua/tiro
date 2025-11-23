@@ -7,7 +7,7 @@ use time::Duration;
 
 use crate::config::Category;
 use crate::parse::{LifeChunk, LifeLapse, TimedLifeChunk};
-use chrono::{Date, DateTime, Datelike, Local};
+use chrono::{DateTime, Datelike, Local, NaiveDate};
 use std::ops::Add;
 
 /// A summary matching activities to their total duration in a day.
@@ -50,13 +50,13 @@ pub fn merge_summaries_on_same_date(
 
     for (timestamp, summary) in summaries {
         assert!(!new_summaries.is_empty());
-        if Some(timestamp.date()) == current_date || current_date.is_none() {
+        if Some(timestamp.date_naive()) == current_date || current_date.is_none() {
             let (_, last) = new_summaries.pop().unwrap();
             new_summaries.push((timestamp, merge_summaries(last, summary)));
         } else {
             new_summaries.push((timestamp, summary));
         }
-        current_date = Some(timestamp.date());
+        current_date = Some(timestamp.date_naive());
     }
 
     new_summaries
@@ -82,14 +82,14 @@ fn compute_summary(tiro_tokens: &[TimedLifeChunk]) -> Summary {
 
 pub fn format_category_summary(
     ctg_summary: Vec<CategorySummary>,
-    date: Date<Local>,
+    date: NaiveDate,
 ) -> Vec<String> {
     format_category_summary_with_note(ctg_summary, date, "(summary)")
 }
 
 pub fn format_category_summary_with_note(
     ctg_summary: Vec<CategorySummary>,
-    date: Date<Local>,
+    date: NaiveDate,
     note: &str,
 ) -> Vec<String> {
     let mut lines = vec![];
@@ -162,7 +162,7 @@ mod tests {
         compute_context_summary, compute_summary, format_category_summary,
         format_category_summary_with_note, format_duration, CategorySummary, Summary,
     };
-    use chrono::{Date, Datelike, Local, TimeZone, Utc};
+    use chrono::{Datelike, Local, NaiveDate, TimeZone, Utc};
     use colored::Colorize;
     use std::collections::HashMap;
     use time::Duration; // For asserting bolded dates
@@ -321,8 +321,8 @@ mod tests {
     }
 
     // Tests for format_category_summary and format_category_summary_with_note
-    fn get_test_date() -> Date<Local> {
-        Local.ymd(2024, 3, 15) // Directly returns Date<Local>
+    fn get_test_date() -> NaiveDate {
+        Local.with_ymd_and_hms(2024, 3, 15, 0, 0, 0).unwrap().date_naive()
     }
 
     #[test]
@@ -429,9 +429,9 @@ mod tests {
 
     #[test]
     fn merge_summaries_on_same_date_mixed_dates_returns_merged_by_date() {
-        let d1 = Local.ymd(2020, 12, 1).and_hms(10, 0, 0);
-        let d2 = Local.ymd(2020, 12, 1).and_hms(12, 0, 0); // Same day
-        let d3 = Local.ymd(2020, 12, 2).and_hms(10, 0, 0); // Next day
+        let d1 = Local.with_ymd_and_hms(2020, 12, 1, 10, 0, 0).unwrap();
+        let d2 = Local.with_ymd_and_hms(2020, 12, 1, 12, 0, 0).unwrap(); // Same day
+        let d3 = Local.with_ymd_and_hms(2020, 12, 2, 10, 0, 0).unwrap(); // Next day
 
         let mut s1 = HashMap::new();
         s1.insert("@work".to_string(), Duration::hours(1));
@@ -445,10 +445,10 @@ mod tests {
 
         assert_eq!(merged.len(), 2); // 2 days
                                      // First day (merged)
-        assert_eq!(merged[0].0.date(), d1.date());
+        assert_eq!(merged[0].0.date_naive(), d1.date_naive());
         assert_eq!(merged[0].1.get("@work"), Some(&Duration::hours(3)));
         // Second day
-        assert_eq!(merged[1].0.date(), d3.date());
+        assert_eq!(merged[1].0.date_naive(), d3.date_naive());
         assert_eq!(merged[1].1.get("@home"), Some(&Duration::hours(1)));
     }
 }
