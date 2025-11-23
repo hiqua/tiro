@@ -13,7 +13,7 @@ use crate::summary::{
     compute_context_summary, format_category_summary, format_category_summary_with_note,
     merge_all_summaries, Summary, Timestamp,
 };
-pub type Writer = (Box<dyn Write>, bool);
+pub type Writer = crate::pretty_print::OutputWriter;
 use anyhow::Result;
 
 pub struct Writers {
@@ -22,30 +22,22 @@ pub struct Writers {
     pub global_summary_writers: Vec<Writer>,
 }
 
-pub fn write_plan(
-    all_life_lapses: &[LifeLapse],
-    mut plan_writers: Vec<(Box<dyn Write>, bool)>,
-) -> Result<()> {
-    for (ref mut plan_writer, plan_color) in &mut plan_writers {
-        write_to(
-            || format_lifelapses(all_life_lapses),
-            plan_writer.borrow_mut(),
-            *plan_color,
-        )?;
+pub fn write_plan(all_life_lapses: &[LifeLapse], mut plan_writers: Vec<Writer>) -> Result<()> {
+    for plan_writer in &mut plan_writers {
+        write_to(|| format_lifelapses(all_life_lapses), plan_writer)?;
     }
     Ok(())
 }
 
 pub fn write_summary(
     all_summaries: &[(Timestamp, Summary)],
-    mut summary_writers: Vec<(Box<dyn Write>, bool)>,
+    mut summary_writers: Vec<Writer>,
 ) -> Result<()> {
     for (ts, summary) in all_summaries {
-        for (ref mut summary_writer, summary_color) in &mut summary_writers {
+        for summary_writer in &mut summary_writers {
             write_to(
                 || format_category_summary(compute_context_summary(summary), ts.date()),
-                summary_writer.borrow_mut(),
-                *summary_color,
+                summary_writer,
             )?;
         }
     }
@@ -54,11 +46,11 @@ pub fn write_summary(
 
 pub fn write_global_summary(
     all_summaries: &[(Timestamp, Summary)],
-    mut summary_writers: Vec<(Box<dyn Write>, bool)>,
+    mut summary_writers: Vec<Writer>,
 ) -> Result<()> {
     let only_summaries: Vec<Summary> = all_summaries.iter().map(|(_, s)| s.clone()).collect();
     let summary: Summary = merge_all_summaries(&only_summaries);
-    for (ref mut summary_writer, summary_color) in &mut summary_writers {
+    for summary_writer in &mut summary_writers {
         let date = Local::now().date();
         write_to(
             || {
@@ -68,8 +60,7 @@ pub fn write_global_summary(
                     "(all past summaries)",
                 )
             },
-            summary_writer.borrow_mut(),
-            *summary_color,
+            summary_writer,
         )?;
     }
     // TODO write to output
