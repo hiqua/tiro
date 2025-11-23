@@ -51,7 +51,7 @@ impl LifeLapse {
     /// when the LifeLapse is empty.
     pub fn extend<I: IntoIterator<Item = TimedLifeChunk>>(&mut self, iter: I) {
         let new_tokens: Vec<_> = iter.into_iter().collect();
-        
+
         // Validate invariant: first token must match start time if this is empty
         if self.tokens.is_empty() && !new_tokens.is_empty() {
             assert_eq!(
@@ -59,9 +59,9 @@ impl LifeLapse {
                 "First token start time must match LifeLapse start time"
             );
         }
-        
+
         self.tokens.extend(new_tokens);
-        
+
         // Recalculate end time to maintain invariant
         let d = self.total_duration();
         self.end = self.start + d;
@@ -80,7 +80,7 @@ impl LifeLapse {
                 "First token start time must match LifeLapse start time"
             );
         }
-        
+
         self.end = self.end + item.life_chunk.duration;
         self.tokens.push(item);
     }

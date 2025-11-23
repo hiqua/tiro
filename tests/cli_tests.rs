@@ -295,7 +295,7 @@ fn cli_with_separate_summary_and_plan_files() {
     assert!(plan_path.exists(), "Plan file should be created");
 
     let summary_content = fs::read_to_string(&summary_path).unwrap();
-    
+
     // Replace dynamic date with placeholder
     let re = Regex::new(r"\d{4}-\d{2}-\d{2}\+\d{2}:\d{2} \(all past summaries\)").unwrap();
     let normalized = re.replace(&summary_content, "<DATE> (all past summaries)");
@@ -332,11 +332,9 @@ fn cli_with_nonexistent_config_fails() {
     let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
     cmd.arg("--config").arg("/nonexistent/config.toml");
 
-    cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "Cannot proceed without valid configuration path",
-        ));
+    cmd.assert().failure().stderr(predicate::str::contains(
+        "Cannot proceed without valid configuration path",
+    ));
 }
 
 #[test]
