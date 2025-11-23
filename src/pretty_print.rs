@@ -245,6 +245,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
         writeln!(file, "line 2").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is a superset
         let new_content = "line 1\nline 2\nline 3\n";
@@ -265,6 +266,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
         writeln!(file, "line 2").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is different
         let new_content = "line 1\nline 3\n";
@@ -284,6 +286,7 @@ mod tests {
         let file_path = dir_path.join(format!("{}_old.txt", prefix));
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is exact match
         let new_content = "line 1\n";
@@ -306,6 +309,7 @@ mod tests {
         let file_path = dir_path.join("other_prefix_old.txt");
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is superset
         let new_content = "line 1\nline 2\n";
@@ -331,6 +335,8 @@ mod tests {
         let mut file2 = File::create(&file_path2).unwrap();
         writeln!(file1, "line 1").unwrap();
         writeln!(file2, "line 1\nline 2").unwrap();
+        assert!(file_path1.exists(), "File 1 should exist before cleanup");
+        assert!(file_path2.exists(), "File 2 should exist before cleanup");
 
         // New content is a superset of both
         let new_content = "line 1\nline 2\nline 3\n";
@@ -351,6 +357,7 @@ mod tests {
         let file_path = dir_path.join(format!("{}_old.txt", prefix));
         let mut file = File::create(&file_path).unwrap();
         write!(file, "line 1 partial").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content starts with the old one, but not on a line boundary
         let new_content = "line 1 partial extra";
@@ -373,6 +380,7 @@ mod tests {
         let file_path = dir_path.join(format!("{}_old.txt", prefix));
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1\nline 2").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is shorter
         let new_content = "line 1\n";
