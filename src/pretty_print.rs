@@ -125,7 +125,14 @@ pub fn write_to(
     output_producer: impl Fn() -> Vec<String>,
     writer: &mut OutputWriter,
 ) -> Result<()> {
+    if !writer.color {
+        set_override(false);
+    }
     let output = output_producer();
+    if !writer.color {
+        unset_override();
+    }
+
     let content = output.join("\n");
 
     if let OutputTarget::Managed {
@@ -144,11 +151,7 @@ pub fn write_to(
         }
     };
 
-    if !writer.color {
-        set_override(false);
-    }
     writeln!(out_writer, "{}", content)?;
-    unset_override();
     Ok(())
 }
 
@@ -316,5 +319,34 @@ mod tests {
             file_path.exists(),
             "File with different prefix should be preserved"
         );
+    }
+
+    #[test]
+    fn test_write_to_file_no_color() {
+        use chrono::Local;
+        use colored::control;
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test_output.txt");
+
+        let mut writer = get_output_writer(
+            Some(file_path.to_str().unwrap()),
+            "test",
+            "filetime",
+            Local::now(),
+        );
+
+        // Force coloring to be on for this test's context,
+        // to simulate an environment where coloring is enabled by default.
+        control::set_override(true);
+
+        let producer = || vec!["hello".red().to_string()];
+
+        write_to(producer, &mut writer).unwrap();
+
+        // It is good practice to clean up the global state change.
+        control::unset_override();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "hello\n");
     }
 }

@@ -93,7 +93,7 @@ pub fn format_category_summary_with_note(
     note: &str,
 ) -> Vec<String> {
     let mut lines = vec![];
-    let f_date = date.to_string().bold();
+    let f_date = date.to_string();
     lines.push(format!("{} {}", f_date, note));
     for ctxt in ctg_summary {
         lines.push(format!("{}: {}", ctxt.name, format_duration(ctxt.duration)));
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn format_category_summary_basic_vec_returns_formatted_lines() {
         let test_date = get_test_date();
-        let date_str_bold = test_date.to_string().bold().to_string();
+        let date_str_bold = test_date.to_string().to_string();
         let ctg_summary_vec = vec![
             CategorySummary {
                 name: "@food",
