@@ -26,3 +26,5 @@ jobs:
       run: cargo fmt -- --check
     - name: Run tests
       run: export TZ='Europe/Paris' && cargo test --verbose
+    - name: Check for flakes
+      run: export TZ='Europe/Paris' && for i in {1..100} ; do cargo test --quiet || return $? ; done
