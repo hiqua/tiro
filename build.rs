@@ -1,7 +1,7 @@
 extern crate vergen;
 
 use std::process::Command;
-use vergen::{generate_cargo_keys, ConstantsFlags};
+use vergen::Emitter;
 
 fn is_current_repo_clean() -> bool {
     if let Ok(out) = Command::new("git")
@@ -16,7 +16,9 @@ fn is_current_repo_clean() -> bool {
 }
 
 fn main() {
-    generate_cargo_keys(ConstantsFlags::all()).expect("Unable to generate the cargo keys!");
+    Emitter::new()
+        .emit()
+        .expect("Unable to generate the cargo keys!");
 
     let version_suffix = if is_current_repo_clean() {
         "clean"

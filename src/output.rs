@@ -36,7 +36,7 @@ pub fn write_summary(
     for (ts, summary) in all_summaries {
         for summary_writer in &mut summary_writers {
             write_to(
-                || format_category_summary(compute_context_summary(summary), ts.date()),
+                || format_category_summary(compute_context_summary(summary), ts.date_naive()),
                 summary_writer,
             )?;
         }
@@ -51,7 +51,7 @@ pub fn write_global_summary(
     let only_summaries: Vec<Summary> = all_summaries.iter().map(|(_, s)| s.clone()).collect();
     let summary: Summary = merge_all_summaries(&only_summaries);
     for summary_writer in &mut summary_writers {
-        let date = Local::now().date();
+        let date = Local::now().date_naive();
         write_to(
             || {
                 format_category_summary_with_note(

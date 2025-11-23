@@ -6,7 +6,7 @@ use std::time::Duration as StdDuration;
 
 use chrono::{Duration, Local};
 // use notify_rust::Notification;
-use time::OutOfRangeError;
+use chrono::OutOfRangeError;
 
 use crate::parse::{LifeChunk, TimedLifeChunk};
 

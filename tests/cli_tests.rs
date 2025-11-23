@@ -40,7 +40,7 @@ fn cli_basic_run_with_activities_file_outputs_to_stdout() {
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
 
     // Replace dynamic date in global summary with placeholder
-    let re = Regex::new(r"\d{4}-\d{2}-\d{2}\+\d{2}:\d{2} \(all past summaries\)").unwrap();
+    let re = Regex::new(r"\d{4}-\d{2}-\d{2} \(all past summaries\)").unwrap();
     let normalized = re.replace(&stdout, "<DATE> (all past summaries)");
 
     let expected = dedent(
@@ -49,7 +49,7 @@ fn cli_basic_run_with_activities_file_outputs_to_stdout() {
         -> 11h00 Task 1 @work
         -> 13h00 Task 2 @home
 
-        2020-12-01+01:00 (summary)
+        2020-12-01 (summary)
         @home: 02h00
         @work: 01h00
 
@@ -106,7 +106,7 @@ fn cli_with_summary_output_file_creates_file() {
     let summary_content = fs::read_to_string(&summary_path).unwrap();
 
     // Replace dynamic date with placeholder
-    let re = Regex::new(r"\d{4}-\d{2}-\d{2}\+\d{2}:\d{2} \(all past summaries\)").unwrap();
+    let re = Regex::new(r"\d{4}-\d{2}-\d{2} \(all past summaries\)").unwrap();
     let normalized = re.replace(&summary_content, "<DATE> (all past summaries)");
 
     let expected = dedent(
@@ -219,7 +219,7 @@ fn cli_outputs_both_summary_and_global_summary() {
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
 
     // Replace dynamic date in global summary with placeholder
-    let re = Regex::new(r"\d{4}-\d{2}-\d{2}\+\d{2}:\d{2} \(all past summaries\)").unwrap();
+    let re = Regex::new(r"\d{4}-\d{2}-\d{2} \(all past summaries\)").unwrap();
     let normalized = re.replace(&stdout, "<DATE> (all past summaries)");
 
     let expected = dedent(
@@ -232,11 +232,11 @@ fn cli_outputs_both_summary_and_global_summary() {
         -> 12h00 Development @project
         -> 13h00 Review @meeting
 
-        2020-12-01+01:00 (summary)
+        2020-12-01 (summary)
         @meeting: 01h30
         @project: 02h00
 
-        2020-12-02+01:00 (summary)
+        2020-12-02 (summary)
         @meeting: 01h00
         @project: 03h00
 
@@ -297,7 +297,7 @@ fn cli_with_separate_summary_and_plan_files() {
     let summary_content = fs::read_to_string(&summary_path).unwrap();
 
     // Replace dynamic date with placeholder
-    let re = Regex::new(r"\d{4}-\d{2}-\d{2}\+\d{2}:\d{2} \(all past summaries\)").unwrap();
+    let re = Regex::new(r"\d{4}-\d{2}-\d{2} \(all past summaries\)").unwrap();
     let normalized = re.replace(&summary_content, "<DATE> (all past summaries)");
 
     let expected_summary = dedent(
@@ -364,7 +364,7 @@ fn cli_with_stdin_input_processes_activities() {
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
 
     // Replace dynamic date in global summary with placeholder
-    let re = Regex::new(r"\d{4}-\d{2}-\d{2}\+\d{2}:\d{2} \(all past summaries\)").unwrap();
+    let re = Regex::new(r"\d{4}-\d{2}-\d{2} \(all past summaries\)").unwrap();
     let normalized = re.replace(&stdout, "<DATE> (all past summaries)");
 
     let expected = dedent(
@@ -372,7 +372,7 @@ fn cli_with_stdin_input_processes_activities() {
         -- 09:00 2020-12-01
         -> 10h00 Morning task @urgent
 
-        2020-12-01+01:00 (summary)
+        2020-12-01 (summary)
         @urgent: 01h00
 
         <DATE> (all past summaries)

@@ -64,7 +64,7 @@ impl LifeLapse {
 
         // Recalculate end time to maintain invariant
         let d = self.total_duration();
-        self.end = self.start + d;
+        self.end = self.start + d.to_std().unwrap();
     }
 
     /// Pushes a single TimedLifeChunk to this LifeLapse.
@@ -81,7 +81,7 @@ impl LifeLapse {
             );
         }
 
-        self.end = self.end + item.life_chunk.duration;
+        self.end = self.end + item.life_chunk.duration.to_std().unwrap();
         self.tokens.push(item);
     }
 
