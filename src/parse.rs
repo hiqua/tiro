@@ -50,10 +50,7 @@ pub fn get_all_life_lapses(
     (start_time, all_life_lapses)
 }
 
-pub fn sort_and_filter_life_lapses(
-    all_life_lapses: &mut Vec<LifeLapse>,
-    start_time: Timestamp,
-) {
+pub fn sort_and_filter_life_lapses(all_life_lapses: &mut Vec<LifeLapse>, start_time: Timestamp) {
     all_life_lapses.sort_by_key(|ll| ll.start());
 
     *all_life_lapses = all_life_lapses
@@ -210,7 +207,7 @@ pub(crate) fn get_life_chunk(line: &str) -> LifeChunk {
     // XXX: what to do if description is empty (categories self-explaining). Could have None instead.
     let user_provided_quadrant = quadrant.is_some();
     let qu = quadrant.unwrap_or_default();
-    
+
     LifeChunk::new(
         description.to_string(),
         duration,
