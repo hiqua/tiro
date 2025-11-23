@@ -66,6 +66,47 @@ fn cli_basic_run_with_activities_file_outputs_to_stdout() {
 }
 
 #[test]
+fn cli_stdout_is_colored() {
+    let dir = tempdir().unwrap();
+    let activities_path = dir.path().join("activities.txt");
+    let config_path = dir.path().join("config.toml");
+
+    fs::write(
+        &activities_path,
+        "2020-12-01 10:00\n1 0 Task 1 @work\n",
+    )
+    .unwrap();
+
+    fs::write(
+        &config_path,
+        dedent(&format!(
+            r#"
+            activity_paths = ["{}"]
+
+            [quadrants]
+            Q1 = ["@work"]
+            "#,
+            activities_path.to_str().unwrap()
+        )),
+    )
+    .unwrap();
+
+    let mut cmd = assert_cmd::Command::from_std(Command::new(env!("CARGO_BIN_EXE_tiro")));
+    cmd.arg("--config").arg(config_path.to_str().unwrap());
+    // Force color output for the test environment
+    cmd.env("CLICOLOR_FORCE", "1");
+
+    let output = cmd.assert().success();
+    let stdout_bytes = &output.get_output().stdout;
+
+    // Check for the ANSI escape character byte (0x1B)
+    assert!(
+        stdout_bytes.contains(&b'\x1B'),
+        "stdout should contain ANSI color codes, but it did not."
+    );
+}
+
+#[test]
 fn cli_with_summary_output_file_creates_file() {
     let dir = tempdir().unwrap();
     let activities_path = dir.path().join("activities.txt");
