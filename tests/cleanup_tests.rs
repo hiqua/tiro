@@ -213,7 +213,13 @@ fn cleanup_removes_redundant_summary_files() {
     );
     let summary_file_1 = files_1
         .iter()
-        .find(|f| f.file_name().unwrap().to_str().unwrap().starts_with("summary"))
+        .find(|f| {
+            f.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("summary")
+        })
         .unwrap()
         .clone();
     let global_summary_file_1 = files_1
@@ -254,7 +260,13 @@ fn cleanup_removes_redundant_summary_files() {
 
     let summary_file_2 = files_2
         .iter()
-        .find(|f| f.file_name().unwrap().to_str().unwrap().starts_with("summary"))
+        .find(|f| {
+            f.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("summary")
+        })
         .unwrap()
         .clone();
     let global_summary_file_2 = files_2
@@ -269,7 +281,10 @@ fn cleanup_removes_redundant_summary_files() {
         .unwrap()
         .clone();
 
-    assert!(!summary_file_1.exists(), "Old summary file should be deleted");
+    assert!(
+        !summary_file_1.exists(),
+        "Old summary file should be deleted"
+    );
     assert!(
         !global_summary_file_1.exists(),
         "Old global summary file should be deleted"
