@@ -28,15 +28,11 @@ pub fn main_loop(config: &Config) -> anyhow::Result<(Sender<()>, Option<JoinHand
     let all_summaries = merge_summaries_on_same_date(all_summaries);
 
     // WRITE
-    let Writers {
-        plan_writers,
-        summary_writers,
-        global_summary_writers,
-    } = get_writers(start_time, config);
+    let mut writers = get_writers(start_time, config);
 
-    write_plan(&all_life_lapses, plan_writers)?;
-    write_summary(&all_summaries, summary_writers)?;
-    write_global_summary(&all_summaries, global_summary_writers)?;
+    write_plan(&all_life_lapses, &mut writers.plan_writers)?;
+    write_summary(&all_summaries, &mut writers.summary_writers)?;
+    write_global_summary(&all_summaries, &mut writers.global_summary_writers)?;
     // END WRITE
 
     // WATCHING
