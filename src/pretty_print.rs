@@ -245,6 +245,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
         writeln!(file, "line 2").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is a superset
         let new_content = "line 1\nline 2\nline 3\n";
@@ -265,6 +266,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
         writeln!(file, "line 2").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is different
         let new_content = "line 1\nline 3\n";
@@ -284,6 +286,7 @@ mod tests {
         let file_path = dir_path.join(format!("{}_old.txt", prefix));
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is exact match
         let new_content = "line 1\n";
@@ -306,6 +309,7 @@ mod tests {
         let file_path = dir_path.join("other_prefix_old.txt");
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "line 1").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
 
         // New content is superset
         let new_content = "line 1\nline 2\n";
@@ -315,6 +319,77 @@ mod tests {
         assert!(
             file_path.exists(),
             "File with different prefix should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_cleanup_redundant_files_multiple_redundant() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create multiple existing files
+        let file_path1 = dir_path.join(format!("{}_old1.txt", prefix));
+        let file_path2 = dir_path.join(format!("{}_old2.txt", prefix));
+        let mut file1 = File::create(&file_path1).unwrap();
+        let mut file2 = File::create(&file_path2).unwrap();
+        writeln!(file1, "line 1").unwrap();
+        writeln!(file2, "line 1\nline 2").unwrap();
+        assert!(file_path1.exists(), "File 1 should exist before cleanup");
+        assert!(file_path2.exists(), "File 2 should exist before cleanup");
+
+        // New content is a superset of both
+        let new_content = "line 1\nline 2\nline 3\n";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(!file_path1.exists(), "Old file 1 should be deleted");
+        assert!(!file_path2.exists(), "Old file 2 should be deleted");
+    }
+
+    #[test]
+    fn test_cleanup_redundant_files_not_a_prefix_on_line_boundary() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create an existing file
+        let file_path = dir_path.join(format!("{}_old.txt", prefix));
+        let mut file = File::create(&file_path).unwrap();
+        write!(file, "line 1 partial").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
+
+        // New content starts with the old one, but not on a line boundary
+        let new_content = "line 1 partial extra";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(
+            file_path.exists(),
+            "Old file should be preserved (not a prefix on line boundary)"
+        );
+    }
+
+    #[test]
+    fn test_cleanup_redundant_files_new_content_shorter() {
+        let dir = tempdir().unwrap();
+        let dir_path = dir.path();
+        let prefix = "test_prefix";
+
+        // Create an existing file
+        let file_path = dir_path.join(format!("{}_old.txt", prefix));
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "line 1\nline 2").unwrap();
+        assert!(file_path.exists(), "File should exist before cleanup");
+
+        // New content is shorter
+        let new_content = "line 1\n";
+
+        cleanup_redundant_files(dir_path, prefix, new_content).unwrap();
+
+        assert!(
+            file_path.exists(),
+            "Old file should be preserved (new content is shorter)"
         );
     }
 }
