@@ -125,6 +125,9 @@ pub fn write_to(
     output_producer: impl Fn() -> Vec<String>,
     writer: &mut OutputWriter,
 ) -> Result<()> {
+    if !writer.color {
+        set_override(false);
+    }
     let output = output_producer();
     let content = output.join("\n");
 
@@ -144,9 +147,6 @@ pub fn write_to(
         }
     };
 
-    if !writer.color {
-        set_override(false);
-    }
     writeln!(out_writer, "{}", content)?;
     unset_override();
     Ok(())
