@@ -49,7 +49,7 @@ fn cli_basic_run_with_activities_file_outputs_to_stdout() {
         -> 11h00 Task 1 @work
         -> 13h00 Task 2 @home
 
-        2020-12-01+01:00 (summary)
+        2020-12-01+00:00 (summary)
         @home: 02h00
         @work: 01h00
 
@@ -232,11 +232,11 @@ fn cli_outputs_both_summary_and_global_summary() {
         -> 12h00 Development @project
         -> 13h00 Review @meeting
 
-        2020-12-01+01:00 (summary)
+        2020-12-01+00:00 (summary)
         @meeting: 01h30
         @project: 02h00
 
-        2020-12-02+01:00 (summary)
+        2020-12-02+00:00 (summary)
         @meeting: 01h00
         @project: 03h00
 
@@ -372,7 +372,7 @@ fn cli_with_stdin_input_processes_activities() {
         -- 09:00 2020-12-01
         -> 10h00 Morning task @urgent
 
-        2020-12-01+01:00 (summary)
+        2020-12-01+00:00 (summary)
         @urgent: 01h00
 
         <DATE> (all past summaries)

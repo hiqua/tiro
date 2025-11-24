@@ -30,8 +30,18 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn new(activity_paths: Vec<PathBuf>) -> Self {
+        let mut config = Self::default();
+        for path in activity_paths {
+            config.add_activity_path(path);
+        }
+        config
+    }
+
     fn add_activity_path(&mut self, p: PathBuf) {
-        self.activity_paths.insert(canonicalize(p).unwrap());
+        if let Ok(canonical_path) = canonicalize(p) {
+            self.activity_paths.insert(canonical_path);
+        }
     }
 
     pub fn get_file_paths(&self) -> BTreeSet<PathBuf> {
@@ -393,6 +403,13 @@ mod tests {
             parse_state.categories_to_quadrant.get("@existing"),
             Some(&Quadrant::Q1)
         );
+    }
+
+    #[test]
+    fn test_add_activity_path_non_existent() {
+        let mut config = Config::default();
+        config.add_activity_path(PathBuf::from("non_existent_path"));
+        assert!(config.get_file_paths().is_empty());
     }
 }
 
